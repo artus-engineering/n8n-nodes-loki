@@ -304,6 +304,36 @@ describe('normalizeNameValueRows', () => {
         ).toEqual([{ name: 'payload', value: '{"ok":true}', type: 'json' }])
     })
 
+    it('stringifies object values even when the declared type is string', () => {
+        expect(
+            normalizeNameValueRows({
+                assignments: [{ name: 'payload', value: { ok: true }, type: 'string' }]
+            })
+        ).toEqual([{ name: 'payload', value: '{"ok":true}', type: 'string' }])
+    })
+
+    it('treats null assignment values as empty strings', () => {
+        expect(
+            normalizeNameValueRows({
+                assignments: [{ name: 'job', value: null, type: 'string' }]
+            })
+        ).toEqual([{ name: 'job', value: '', type: 'string' }])
+    })
+
+    it('stringifies primitive number and boolean assignment values', () => {
+        expect(
+            normalizeNameValueRows({
+                assignments: [
+                    { name: 'count', value: 3, type: 'number' },
+                    { name: 'active', value: true, type: 'boolean' }
+                ]
+            })
+        ).toEqual([
+            { name: 'count', value: '3', type: 'number' },
+            { name: 'active', value: 'true', type: 'boolean' }
+        ])
+    })
+
     it('skips rows without a name and empty input', () => {
         expect(normalizeNameValueRows({ assignments: [{ value: 'n8n' }] })).toEqual([])
         expect(normalizeNameValueRows(undefined)).toEqual([])

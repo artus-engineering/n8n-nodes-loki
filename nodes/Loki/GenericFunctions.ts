@@ -129,17 +129,20 @@ function mapAssignmentType(type: unknown): TypedField['type'] {
     return 'string'
 }
 
-function stringifyAssignmentValue(value: unknown, type: TypedField['type']): string {
-    if (value === undefined || value === null) {
-        return ''
-    }
+function stringifyAssignmentValue(value: unknown): string {
     if (typeof value === 'string') {
         return value
     }
-    if (type === 'json' && typeof value === 'object') {
+    if (typeof value === 'number') {
+        return value.toString()
+    }
+    if (typeof value === 'boolean') {
+        return value ? 'true' : 'false'
+    }
+    if (value != null && typeof value === 'object') {
         return JSON.stringify(value)
     }
-    return String(value)
+    return ''
 }
 
 function rowToNameValue(row: unknown): TypedField[] {
@@ -152,7 +155,7 @@ function rowToNameValue(row: unknown): TypedField[] {
         return []
     }
     const type = mapAssignmentType(record.type)
-    return [{ name, value: stringifyAssignmentValue(record.value, type), type }]
+    return [{ name, value: stringifyAssignmentValue(record.value), type }]
 }
 
 function isPlainNameValueMap(record: Record<string, unknown>): boolean {
@@ -193,7 +196,7 @@ export function normalizeNameValueRows(raw: unknown): TypedField[] {
             .filter(([name]) => name.length > 0)
             .map(([name, value]) => ({
                 name,
-                value: stringifyAssignmentValue(value, 'string'),
+                value: stringifyAssignmentValue(value),
                 type: 'string' as const
             }))
     }
