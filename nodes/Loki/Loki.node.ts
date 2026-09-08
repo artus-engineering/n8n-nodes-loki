@@ -196,7 +196,10 @@ export class Loki implements INodeType {
     description: INodeTypeDescription = {
         displayName: 'Loki',
         name: 'loki',
-        icon: 'file:loki.svg',
+        icon: {
+            light: 'file:loki.svg',
+            dark: 'file:loki.dark.svg'
+        },
         group: ['output'],
         version: 1,
         subtitle: '={{$parameter["operation"]}}',

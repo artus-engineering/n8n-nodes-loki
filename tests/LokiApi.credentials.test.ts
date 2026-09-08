@@ -37,7 +37,7 @@ describe('LokiApi credential', () => {
         const credentials: ICredentialDataDecryptedObject = {
             authentication: 'headerAuth',
             headerName: 'X-Api-Key',
-            headerValue: 'secret'
+            headerSecret: 'secret'
         }
         const result = await credential.authenticate(credentials, baseRequestOptions())
         expect((result.headers as Record<string, string>)['X-Api-Key']).toBe('secret')

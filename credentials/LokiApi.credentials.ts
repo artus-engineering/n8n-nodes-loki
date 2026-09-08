@@ -11,7 +11,10 @@ export class LokiApi implements ICredentialType {
 
     displayName = 'Loki API'
 
-    icon = 'file:../nodes/Loki/loki.svg' as const
+    icon = {
+        light: 'file:../nodes/Loki/loki.svg',
+        dark: 'file:../nodes/Loki/loki.dark.svg'
+    } as const
 
     documentationUrl = 'https://grafana.com/docs/loki/latest/reference/loki-http-api/'
 
@@ -69,8 +72,8 @@ export class LokiApi implements ICredentialType {
             displayOptions: { show: { authentication: ['headerAuth'] } }
         },
         {
-            displayName: 'Header Value',
-            name: 'headerValue',
+            displayName: 'Header Secret',
+            name: 'headerSecret',
             type: 'string',
             typeOptions: { password: true },
             default: '',
@@ -127,7 +130,7 @@ export class LokiApi implements ICredentialType {
         } else if (credentials.authentication === 'headerAuth') {
             const headerName = credentials.headerName as string
             if (headerName) {
-                headers[headerName] = credentials.headerValue as string
+                headers[headerName] = credentials.headerSecret as string
             }
         }
 

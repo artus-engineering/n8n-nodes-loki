@@ -67,7 +67,7 @@ Create a **Loki API** credential and configure:
 | **Authentication** | `None` (default), `Basic Auth`, `Bearer Token`, or `Header Auth` |
 | **Username / Password** | Shown for Basic Auth |
 | **Token** | Shown for Bearer Token |
-| **Header Name / Header Value** | Shown for Header Auth, e.g. an `X-Api-Key` header |
+| **Header Name / Header Secret** | Shown for Header Auth, e.g. an `X-Api-Key` header |
 | **Tenant ID (X-Scope-OrgID)** | Sent as `X-Scope-OrgID` for multi-tenant Loki setups. Leave empty otherwise |
 | **Custom Headers** | Arbitrary name/value headers sent with every request |
 | **Ignore SSL Issues (Insecure)** | Accept self-signed or otherwise invalid TLS certificates |

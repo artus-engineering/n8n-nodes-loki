@@ -168,7 +168,7 @@
         },
         { "includes": ["**/*.d.ts"], "linter": { "rules": {} } },
         {
-            "includes": ["**/*.config.ts", "**/*.config.mjs"],
+            "includes": ["**/*.config.ts", "**/*.config.mts", "**/*.config.mjs"],
             "javascript": {
                 "globals": ["process", "__dirname"]
             }
