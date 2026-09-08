@@ -1,6 +1,6 @@
 {
     "name": "@artus-engineering/n8n-nodes-loki",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "packageManager": "pnpm@11.24.0",
     "description": "n8n community node to write log lines to Grafana Loki.",
     "license": "MIT",

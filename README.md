@@ -79,12 +79,12 @@ Use **Test** on the credential to verify connectivity (calls `GET /loki/api/v1/l
 | Parameter | Description |
 | --- | --- |
 | **Operation** | `Send Log` — pushes one or more log lines to Loki |
-| **Labels** | Loki stream labels (name/value pairs). At least one is required, e.g. `job` = `n8n` |
+| **Labels** | Loki stream labels (name/value pairs, Edit Fields–style). At least one is required, e.g. `job` = `n8n`. In workflow JSON this is `{ "assignments": [{ "name": "job", "value": "n8n", "type": "string" }] }` |
 | **Log Format** | `Text` or `JSON` |
 | **Message** | The plain-text log line (shown for `Text`) |
 | **JSON Input Mode** | `JSON` (a raw JSON value) or `Fields Below` (build an object from typed fields) — shown for `JSON` |
 | **JSON** | The raw JSON log line — shown for JSON Input Mode `JSON` |
-| **Fields** | Name/Value/Type rows (String, Number, Boolean, JSON) assembled into the JSON log line — shown for JSON Input Mode `Fields Below` |
+| **Fields** | Name/Value/Type rows assembled into the JSON log line — shown for JSON Input Mode `Fields Below`. Same `assignments` JSON shape as Labels |
 
 ### Options
 

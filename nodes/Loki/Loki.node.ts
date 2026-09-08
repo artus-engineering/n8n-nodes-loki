@@ -13,21 +13,24 @@ import {
 import {
     buildStreams,
     type LokiLogEntry,
+    normalizeNameValueRows,
     resolvePushUrl,
     serializeLogLine,
-    type TypedField,
     toNanoseconds
 } from './GenericFunctions'
 import { lokiProperties } from './LokiDescription'
 
-function readLabels(this: IExecuteFunctions, itemIndex: number): Record<string, string> {
-    const raw = this.getNodeParameter('labels.label', itemIndex, []) as Array<{ name: string; value: string }>
-    const labels: Record<string, string> = {}
-    for (const { name, value } of raw) {
-        if (name) {
-            labels[name] = value
-        }
+function readNameValueMap(this: IExecuteFunctions, parameterName: string, itemIndex: number): Record<string, string> {
+    const rows = normalizeNameValueRows(this.getNodeParameter(parameterName, itemIndex, {}))
+    const mapped: Record<string, string> = {}
+    for (const { name, value } of rows) {
+        mapped[name] = value
     }
+    return mapped
+}
+
+function readLabels(this: IExecuteFunctions, itemIndex: number): Record<string, string> {
+    const labels = readNameValueMap.call(this, 'labels', itemIndex)
     if (Object.keys(labels).length === 0) {
         throw new NodeOperationError(this.getNode(), 'At least one label is required', { itemIndex })
     }
@@ -57,39 +60,17 @@ function readLine(this: IExecuteFunctions, itemIndex: number): string {
         )
     }
 
-    const fields = this.getNodeParameter('jsonFields.field', itemIndex, []) as TypedField[]
+    const fields = normalizeNameValueRows(this.getNodeParameter('jsonFields', itemIndex, {}))
     return serializeLogLine('json', { jsonInputMode: 'fields', fields }, this.getNode())
 }
 
 function readMetadata(this: IExecuteFunctions, itemIndex: number): Record<string, string> | undefined {
-    const raw = this.getNodeParameter('options.structuredMetadata.metadata', itemIndex, []) as Array<{
-        name: string
-        value: string
-    }>
-    if (raw.length === 0) {
-        return undefined
-    }
-    const metadata: Record<string, string> = {}
-    for (const { name, value } of raw) {
-        if (name) {
-            metadata[name] = value
-        }
-    }
-    return metadata
+    const metadata = readNameValueMap.call(this, 'options.structuredMetadata', itemIndex)
+    return Object.keys(metadata).length === 0 ? undefined : metadata
 }
 
 function readAdditionalHeaders(this: IExecuteFunctions, itemIndex: number): Record<string, string> {
-    const raw = this.getNodeParameter('options.additionalHeaders.header', itemIndex, []) as Array<{
-        name: string
-        value: string
-    }>
-    const headers: Record<string, string> = {}
-    for (const { name, value } of raw) {
-        if (name) {
-            headers[name] = value
-        }
-    }
-    return headers
+    return readNameValueMap.call(this, 'options.additionalHeaders', itemIndex)
 }
 
 interface IndexedEntry {
@@ -201,7 +182,7 @@ export class Loki implements INodeType {
             dark: 'file:loki.dark.svg'
         },
         group: ['output'],
-        version: 1,
+        version: [1, 2],
         subtitle: '={{$parameter["operation"]}}',
         description: 'Send log lines to Grafana Loki',
         defaults: {

@@ -19,21 +19,9 @@ export const lokiProperties: INodeProperties[] = [
     {
         displayName: 'Labels',
         name: 'labels',
-        type: 'fixedCollection',
-        typeOptions: { multipleValues: true },
-        placeholder: 'Add Label',
+        type: 'assignmentCollection',
         default: {},
-        description: 'Loki stream labels for this log entry, e.g. "job" / "n8n". At least one label is required.',
-        options: [
-            {
-                displayName: 'Label',
-                name: 'label',
-                values: [
-                    { displayName: 'Name', name: 'name', type: 'string', default: '' },
-                    { displayName: 'Value', name: 'value', type: 'string', default: '' }
-                ]
-            }
-        ]
+        description: 'Loki stream labels for this log entry, e.g. "job" / "n8n". At least one label is required.'
     },
     {
         displayName: 'Log Format',
@@ -77,34 +65,10 @@ export const lokiProperties: INodeProperties[] = [
     {
         displayName: 'Fields',
         name: 'jsonFields',
-        type: 'fixedCollection',
-        typeOptions: { multipleValues: true },
-        placeholder: 'Add Field',
+        type: 'assignmentCollection',
         default: {},
         displayOptions: { show: { logFormat: ['json'], jsonInputMode: ['fields'] } },
-        description: 'Key/value fields that are assembled into the JSON log line',
-        options: [
-            {
-                displayName: 'Field',
-                name: 'field',
-                values: [
-                    { displayName: 'Name', name: 'name', type: 'string', default: '' },
-                    { displayName: 'Value', name: 'value', type: 'string', default: '' },
-                    {
-                        displayName: 'Type',
-                        name: 'type',
-                        type: 'options',
-                        options: [
-                            { name: 'String', value: 'string' },
-                            { name: 'Number', value: 'number' },
-                            { name: 'Boolean', value: 'boolean' },
-                            { name: 'JSON', value: 'json' }
-                        ],
-                        default: 'string'
-                    }
-                ]
-            }
-        ]
+        description: 'Key/value fields that are assembled into the JSON log line'
     },
     {
         displayName: 'Options',

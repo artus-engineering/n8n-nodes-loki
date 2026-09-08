@@ -53,7 +53,7 @@ function createExecuteFunctions(opts: StubOptions): IExecuteFunctions {
 function defaultParams(overrides: ParamTree = {}): ParamTree {
     return {
         operation: 'push',
-        labels: { label: [{ name: 'job', value: 'n8n' }] },
+        labels: { assignments: [{ id: 'job', name: 'job', value: 'n8n', type: 'string' }] },
         logFormat: 'text',
         message: 'hello world',
         jsonInputMode: 'raw',
@@ -105,7 +105,9 @@ describe('Loki node execute', () => {
                 defaultParams({
                     logFormat: 'json',
                     jsonInputMode: 'fields',
-                    jsonFields: { field: [{ name: 'level', value: 'error', type: 'string' }] }
+                    jsonFields: {
+                        assignments: [{ id: 'level', name: 'level', value: 'error', type: 'string' }]
+                    }
                 })
             ],
             httpRequestWithAuthentication
@@ -179,8 +181,12 @@ describe('Loki node execute', () => {
         const context = createExecuteFunctions({
             items: 2,
             paramsByItem: [
-                defaultParams({ labels: { label: [{ name: 'job', value: 'a' }] } }),
-                defaultParams({ labels: { label: [{ name: 'job', value: 'b' }] } })
+                defaultParams({
+                    labels: { assignments: [{ id: 'a', name: 'job', value: 'a', type: 'string' }] }
+                }),
+                defaultParams({
+                    labels: { assignments: [{ id: 'b', name: 'job', value: 'b', type: 'string' }] }
+                })
             ],
             httpRequestWithAuthentication
         })
@@ -195,18 +201,46 @@ describe('Loki node execute', () => {
         const loki = new Loki()
         const context = createExecuteFunctions({
             items: 1,
-            paramsByItem: [defaultParams({ labels: { label: [] } })],
+            paramsByItem: [defaultParams({ labels: { assignments: [] } })],
             httpRequestWithAuthentication
         })
 
         await expect(loki.execute.call(context)).rejects.toThrow('At least one label is required')
     })
 
+    it('still reads the legacy fixedCollection label wrapper', async () => {
+        const loki = new Loki()
+        const context = createExecuteFunctions({
+            items: 1,
+            paramsByItem: [defaultParams({ labels: { label: [{ name: 'job', value: 'legacy' }] } })],
+            httpRequestWithAuthentication
+        })
+
+        await loki.execute.call(context)
+
+        const [, requestOptions] = httpRequestWithAuthentication.mock.calls[0]
+        expect(requestOptions.body.streams[0].stream).toEqual({ job: 'legacy' })
+    })
+
+    it('reads a flat label object the way MCP often writes it', async () => {
+        const loki = new Loki()
+        const context = createExecuteFunctions({
+            items: 1,
+            paramsByItem: [defaultParams({ labels: { job: 'n8n', workflow: 'Observability' } })],
+            httpRequestWithAuthentication
+        })
+
+        await loki.execute.call(context)
+
+        const [, requestOptions] = httpRequestWithAuthentication.mock.calls[0]
+        expect(requestOptions.body.streams[0].stream).toEqual({ job: 'n8n', workflow: 'Observability' })
+    })
+
     it('continues on fail and reports the error as item JSON', async () => {
         const loki = new Loki()
         const context = createExecuteFunctions({
             items: 1,
-            paramsByItem: [defaultParams({ labels: { label: [] } })],
+            paramsByItem: [defaultParams({ labels: { assignments: [] } })],
             httpRequestWithAuthentication,
             continueOnFail: true
         })

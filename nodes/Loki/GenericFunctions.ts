@@ -117,6 +117,90 @@ export interface TypedField {
     type: 'string' | 'number' | 'boolean' | 'json'
 }
 
+const NAME_VALUE_WRAPPER_KEYS = ['assignments', 'label', 'field', 'values', 'header', 'metadata', 'parameters'] as const
+
+function mapAssignmentType(type: unknown): TypedField['type'] {
+    if (type === 'number' || type === 'boolean' || type === 'json') {
+        return type
+    }
+    if (type === 'array' || type === 'object') {
+        return 'json'
+    }
+    return 'string'
+}
+
+function stringifyAssignmentValue(value: unknown, type: TypedField['type']): string {
+    if (value === undefined || value === null) {
+        return ''
+    }
+    if (typeof value === 'string') {
+        return value
+    }
+    if (type === 'json' && typeof value === 'object') {
+        return JSON.stringify(value)
+    }
+    return String(value)
+}
+
+function rowToNameValue(row: unknown): TypedField[] {
+    if (!row || typeof row !== 'object') {
+        return []
+    }
+    const record = row as Record<string, unknown>
+    const name = typeof record.name === 'string' ? record.name : ''
+    if (!name) {
+        return []
+    }
+    const type = mapAssignmentType(record.type)
+    return [{ name, value: stringifyAssignmentValue(record.value, type), type }]
+}
+
+function isPlainNameValueMap(record: Record<string, unknown>): boolean {
+    return Object.values(record).every(
+        value =>
+            value === undefined || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
+    )
+}
+
+/**
+ * Accepts the shapes n8n, the Public API and MCP clients actually persist:
+ * assignmentCollection (`{ assignments: [...] }`), legacy fixedCollection
+ * wrappers (`label` / `field` / `values` / …), a bare row array, or a flat
+ * `{ name: value }` object. fixedCollection rows are dropped on API write
+ * when the wrapper key does not match the node description.
+ */
+export function normalizeNameValueRows(raw: unknown): TypedField[] {
+    if (raw == null) {
+        return []
+    }
+    if (Array.isArray(raw)) {
+        return raw.flatMap(rowToNameValue)
+    }
+    if (typeof raw !== 'object') {
+        return []
+    }
+
+    const record = raw as Record<string, unknown>
+    for (const key of NAME_VALUE_WRAPPER_KEYS) {
+        const nested = record[key]
+        if (Array.isArray(nested)) {
+            return nested.flatMap(rowToNameValue)
+        }
+    }
+
+    if (isPlainNameValueMap(record)) {
+        return Object.entries(record)
+            .filter(([name]) => name.length > 0)
+            .map(([name, value]) => ({
+                name,
+                value: stringifyAssignmentValue(value, 'string'),
+                type: 'string' as const
+            }))
+    }
+
+    return []
+}
+
 function coerceTypedValue(field: TypedField, node: INode): unknown {
     switch (field.type) {
         case 'number': {

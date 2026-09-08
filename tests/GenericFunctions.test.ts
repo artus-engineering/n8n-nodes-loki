@@ -2,6 +2,7 @@ import type { INode } from 'n8n-workflow'
 import { describe, expect, it } from 'vitest'
 import {
     buildStreams,
+    normalizeNameValueRows,
     resolvePushUrl,
     serializeLogLine,
     toNanoseconds,
@@ -258,5 +259,54 @@ describe('buildStreams', () => {
         expect(() => buildStreams([{ labels: { 'bad-label': 'x' }, line: 'x', timestampNs: '1' }], testNode)).toThrow(
             /Invalid label name/
         )
+    })
+})
+
+describe('normalizeNameValueRows', () => {
+    it('reads assignmentCollection rows', () => {
+        expect(
+            normalizeNameValueRows({
+                assignments: [{ id: '1', name: 'job', value: 'n8n', type: 'string' }]
+            })
+        ).toEqual([{ name: 'job', value: 'n8n', type: 'string' }])
+    })
+
+    it('reads a legacy fixedCollection wrapper', () => {
+        expect(normalizeNameValueRows({ label: [{ name: 'job', value: 'n8n' }] })).toEqual([
+            { name: 'job', value: 'n8n', type: 'string' }
+        ])
+    })
+
+    it('reads a values wrapper that MCP clients often emit', () => {
+        expect(normalizeNameValueRows({ values: [{ name: 'job', value: 'n8n' }] })).toEqual([
+            { name: 'job', value: 'n8n', type: 'string' }
+        ])
+    })
+
+    it('reads a bare row array', () => {
+        expect(normalizeNameValueRows([{ name: 'job', value: 'n8n' }])).toEqual([
+            { name: 'job', value: 'n8n', type: 'string' }
+        ])
+    })
+
+    it('reads a flat name/value object', () => {
+        expect(normalizeNameValueRows({ job: 'n8n', workflow: 'Observability' })).toEqual([
+            { name: 'job', value: 'n8n', type: 'string' },
+            { name: 'workflow', value: 'Observability', type: 'string' }
+        ])
+    })
+
+    it('maps assignment object/array types onto json fields', () => {
+        expect(
+            normalizeNameValueRows({
+                assignments: [{ name: 'payload', value: { ok: true }, type: 'object' }]
+            })
+        ).toEqual([{ name: 'payload', value: '{"ok":true}', type: 'json' }])
+    })
+
+    it('skips rows without a name and empty input', () => {
+        expect(normalizeNameValueRows({ assignments: [{ value: 'n8n' }] })).toEqual([])
+        expect(normalizeNameValueRows(undefined)).toEqual([])
+        expect(normalizeNameValueRows({})).toEqual([])
     })
 })
