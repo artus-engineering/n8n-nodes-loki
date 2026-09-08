@@ -92,6 +92,106 @@ function readAdditionalHeaders(this: IExecuteFunctions, itemIndex: number): Reco
     return headers
 }
 
+interface IndexedEntry {
+    entry: LokiLogEntry
+    itemIndex: number
+}
+
+function readLogEntry(this: IExecuteFunctions, itemIndex: number): LokiLogEntry {
+    const timestamp = this.getNodeParameter('options.timestamp', itemIndex, '') as string
+    return {
+        labels: readLabels.call(this, itemIndex),
+        line: readLine.call(this, itemIndex),
+        timestampNs: toNanoseconds(timestamp || undefined, this.getNode()),
+        metadata: readMetadata.call(this, itemIndex)
+    }
+}
+
+function collectEntries(this: IExecuteFunctions, itemCount: number, returnData: INodeExecutionData[]): IndexedEntry[] {
+    const entries: IndexedEntry[] = []
+
+    for (let itemIndex = 0; itemIndex < itemCount; itemIndex++) {
+        try {
+            entries.push({
+                entry: readLogEntry.call(this, itemIndex),
+                itemIndex
+            })
+        } catch (error) {
+            if (this.continueOnFail()) {
+                returnData.push({
+                    json: { error: (error as Error).message },
+                    pairedItem: { item: itemIndex }
+                })
+                continue
+            }
+            throw error instanceof NodeOperationError
+                ? error
+                : new NodeOperationError(this.getNode(), error as Error, { itemIndex })
+        }
+    }
+
+    return entries
+}
+
+async function pushBatch(
+    this: IExecuteFunctions,
+    batch: IndexedEntry[],
+    pushUrl: string,
+    additionalHeaders: Record<string, string>,
+    timeout: number,
+    returnData: INodeExecutionData[]
+): Promise<void> {
+    if (batch.length === 0) {
+        return
+    }
+
+    try {
+        const streams = buildStreams(
+            batch.map(({ entry }) => entry),
+            this.getNode()
+        )
+        const requestOptions: IHttpRequestOptions = {
+            method: 'POST',
+            url: pushUrl,
+            body: { streams },
+            json: true,
+            headers: additionalHeaders,
+            timeout,
+            returnFullResponse: true
+        }
+
+        const response = (await this.helpers.httpRequestWithAuthentication.call(this, 'lokiApi', requestOptions)) as {
+            statusCode: number
+        }
+
+        for (const { itemIndex } of batch) {
+            returnData.push({
+                json: {
+                    success: true,
+                    statusCode: response.statusCode,
+                    entries: batch.length,
+                    streams: streams.length
+                },
+                pairedItem: { item: itemIndex }
+            })
+        }
+    } catch (error) {
+        if (this.continueOnFail()) {
+            for (const { itemIndex } of batch) {
+                returnData.push({
+                    json: { error: (error as Error).message },
+                    pairedItem: { item: itemIndex }
+                })
+            }
+            return
+        }
+        throw new NodeApiError(this.getNode(), error as JsonObject, {
+            description: describeLokiError(error),
+            itemIndex: batch[0].itemIndex
+        })
+    }
+}
+
 export class Loki implements INodeType {
     description: INodeTypeDescription = {
         displayName: 'Loki',
@@ -122,107 +222,33 @@ export class Loki implements INodeType {
 
         const credentials = await this.getCredentials('lokiApi')
         const pushUrl = resolvePushUrl(credentials.url as string, this.getNode())
-
-        const entries: Array<{ entry: LokiLogEntry; itemIndex: number }> = []
-
-        for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
-            try {
-                const labels = readLabels.call(this, itemIndex)
-                const line = readLine.call(this, itemIndex)
-                const timestamp = this.getNodeParameter('options.timestamp', itemIndex, '') as string
-                const metadata = readMetadata.call(this, itemIndex)
-
-                entries.push({
-                    entry: {
-                        labels,
-                        line,
-                        timestampNs: toNanoseconds(timestamp || undefined, this.getNode()),
-                        metadata
-                    },
-                    itemIndex
-                })
-            } catch (error) {
-                if (this.continueOnFail()) {
-                    returnData.push({
-                        json: { error: (error as Error).message },
-                        pairedItem: { item: itemIndex }
-                    })
-                    continue
-                }
-                throw error instanceof NodeOperationError
-                    ? error
-                    : new NodeOperationError(this.getNode(), error as Error, { itemIndex })
-            }
-        }
+        const entries = collectEntries.call(this, items.length, returnData)
 
         const batchAllItems = this.getNodeParameter('options.batchAllItems', 0, true) as boolean
         const timeout = this.getNodeParameter('options.timeout', 0, 10000) as number
         const additionalHeaders = readAdditionalHeaders.call(this, 0)
-
-        const batches: Array<Array<{ entry: LokiLogEntry; itemIndex: number }>> = batchAllItems
-            ? [entries]
-            : entries.map(item => [item])
+        const batches = batchAllItems ? [entries] : entries.map(item => [item])
 
         for (const batch of batches) {
-            if (batch.length === 0) {
-                continue
-            }
-
-            try {
-                const streams = buildStreams(
-                    batch.map(({ entry }) => entry),
-                    this.getNode()
-                )
-                const requestOptions: IHttpRequestOptions = {
-                    method: 'POST',
-                    url: pushUrl,
-                    body: { streams },
-                    json: true,
-                    headers: additionalHeaders,
-                    timeout,
-                    returnFullResponse: true
-                }
-
-                const response = (await this.helpers.httpRequestWithAuthentication.call(
-                    this,
-                    'lokiApi',
-                    requestOptions
-                )) as { statusCode: number }
-
-                for (const { itemIndex } of batch) {
-                    returnData.push({
-                        json: {
-                            success: true,
-                            statusCode: response.statusCode,
-                            entries: batch.length,
-                            streams: streams.length
-                        },
-                        pairedItem: { item: itemIndex }
-                    })
-                }
-            } catch (error) {
-                if (this.continueOnFail()) {
-                    for (const { itemIndex } of batch) {
-                        returnData.push({
-                            json: { error: (error as Error).message },
-                            pairedItem: { item: itemIndex }
-                        })
-                    }
-                    continue
-                }
-                throw new NodeApiError(this.getNode(), error as JsonObject, {
-                    description: describeLokiError(error),
-                    itemIndex: batch[0].itemIndex
-                })
-            }
+            await pushBatch.call(this, batch, pushUrl, additionalHeaders, timeout, returnData)
         }
 
         return [returnData]
     }
 }
 
+function extractErrorMessage(error: unknown): string {
+    if (typeof error === 'string') {
+        return error
+    }
+    if (error && typeof error === 'object' && 'message' in error && typeof error.message === 'string') {
+        return error.message
+    }
+    return 'Unknown error'
+}
+
 function describeLokiError(error: unknown): string {
-    const message = String((error as { message?: string })?.message ?? error)
+    const message = extractErrorMessage(error)
     if (/label/i.test(message)) {
         return 'Check that all label names only contain letters, digits and underscores, and do not start with a digit.'
     }

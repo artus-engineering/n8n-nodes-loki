@@ -1,6 +1,6 @@
 import { type INode, NodeOperationError } from 'n8n-workflow'
 
-const LABEL_NAME_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/
+const LABEL_NAME_PATTERN = /^[a-zA-Z_]\w*$/
 
 export interface LokiLogEntry {
     labels: Record<string, string>
@@ -36,7 +36,7 @@ export function resolvePushUrl(raw: string, node: INode): string {
         throw new NodeOperationError(node, `Loki URL "${trimmed}" must use http or https`)
     }
 
-    const withoutTrailingSlash = trimmed.replace(/\/+$/, '')
+    const withoutTrailingSlash = stripTrailingSlashes(trimmed)
 
     if (withoutTrailingSlash.endsWith('/loki/api/v1/push')) {
         return withoutTrailingSlash
@@ -47,6 +47,14 @@ export function resolvePushUrl(raw: string, node: INode): string {
     }
 
     return `${withoutTrailingSlash}/loki/api/v1/push`
+}
+
+function stripTrailingSlashes(value: string): string {
+    let end = value.length
+    while (end > 0 && value[end - 1] === '/') {
+        end--
+    }
+    return value.slice(0, end)
 }
 
 /**
@@ -171,9 +179,21 @@ export function serializeLogLine(
 
 function canonicalLabelKey(labels: Record<string, string>): string {
     return Object.keys(labels)
-        .sort()
+        .sort((left, right) => left.localeCompare(right))
         .map(key => `${key}=${labels[key]}`)
         .join(',')
+}
+
+function compareNanosecondTimestamps(left: string, right: string): number {
+    const leftNs = BigInt(left)
+    const rightNs = BigInt(right)
+    if (leftNs < rightNs) {
+        return -1
+    }
+    if (leftNs > rightNs) {
+        return 1
+    }
+    return 0
 }
 
 /**
@@ -204,7 +224,7 @@ export function buildStreams(entries: LokiLogEntry[], node: INode): LokiStream[]
     }
 
     for (const stream of streamsByKey.values()) {
-        stream.values.sort((a, b) => (BigInt(a[0]) < BigInt(b[0]) ? -1 : BigInt(a[0]) > BigInt(b[0]) ? 1 : 0))
+        stream.values.sort((a, b) => compareNanosecondTimestamps(a[0], b[0]))
     }
 
     return [...streamsByKey.values()]

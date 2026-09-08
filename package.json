@@ -7,8 +7,8 @@
     "homepage": "https://github.com/artus-engineering/n8n-nodes-loki#readme",
     "keywords": ["n8n-community-node-package", "n8n", "loki", "grafana", "logging", "observability"],
     "author": {
-        "name": "Artus Engineering GmbH",
-        "email": "hi@artus-engineering.de"
+        "name": "Jonas Scholl",
+        "email": "jonas@artus-engineering.de"
     },
     "repository": {
         "type": "git",

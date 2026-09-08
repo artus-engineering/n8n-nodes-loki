@@ -66,4 +66,11 @@ describe('LokiApi credential', () => {
         const result = await credential.authenticate(credentials, baseRequestOptions())
         expect(result.skipSslCertificateValidation).toBe(true)
     })
+
+    it('strips a push path from the credential test base URL expression', () => {
+        const credential = new LokiApi()
+        expect(credential.test.request.baseURL).toBe(
+            String.raw`={{ $credentials.url.trim().replace(/\/+$/, "").replace(/\/loki\/api\/v1(\/push)?$/, "") }}`
+        )
+    })
 })

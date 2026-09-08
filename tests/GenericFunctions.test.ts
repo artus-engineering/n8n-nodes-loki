@@ -26,6 +26,12 @@ describe('resolvePushUrl', () => {
         expect(resolvePushUrl('https://loki.example.com/', testNode)).toBe('https://loki.example.com/loki/api/v1/push')
     })
 
+    it('strips multiple trailing slashes before appending the push path', () => {
+        expect(resolvePushUrl('https://loki.example.com///', testNode)).toBe(
+            'https://loki.example.com/loki/api/v1/push'
+        )
+    })
+
     it('appends only /push when the URL already ends with /loki/api/v1', () => {
         expect(resolvePushUrl('https://loki.example.com/loki/api/v1', testNode)).toBe(
             'https://loki.example.com/loki/api/v1/push'
@@ -196,6 +202,20 @@ describe('buildStreams', () => {
         expect(streams[0].values).toEqual([
             ['1', 'first'],
             ['2', 'second']
+        ])
+    })
+
+    it('keeps equal timestamps in their relative order', () => {
+        const streams = buildStreams(
+            [
+                { labels: { job: 'n8n' }, line: 'first', timestampNs: '1' },
+                { labels: { job: 'n8n' }, line: 'second', timestampNs: '1' }
+            ],
+            testNode
+        )
+        expect(streams[0].values).toEqual([
+            ['1', 'first'],
+            ['1', 'second']
         ])
     })
 

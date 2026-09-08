@@ -217,8 +217,28 @@ describe('Loki node execute', () => {
         expect(httpRequestWithAuthentication).not.toHaveBeenCalled()
     })
 
-    it('wraps a failed request in a NodeApiError with a helpful description', async () => {
-        httpRequestWithAuthentication.mockRejectedValue(new Error('400 - invalid label name'))
+    it.each([
+        ['400 - invalid label name', 'label names only contain letters'],
+        ['entry too far behind', 'out of order or too far behind'],
+        ['401 Unauthorized', 'credential authentication settings'],
+        ['502 - gateway timeout', 'See the Loki response above']
+    ])('wraps a failed request (%s) in a NodeApiError with a helpful description', async (message, description) => {
+        httpRequestWithAuthentication.mockRejectedValue(new Error(message))
+        const loki = new Loki()
+        const context = createExecuteFunctions({
+            items: 1,
+            paramsByItem: [defaultParams()],
+            httpRequestWithAuthentication
+        })
+
+        await expect(loki.execute.call(context)).rejects.toMatchObject({
+            constructor: NodeApiError,
+            description: expect.stringContaining(description)
+        })
+    })
+
+    it('describes a string rejection without using object stringification', async () => {
+        httpRequestWithAuthentication.mockRejectedValue('401 Unauthorized')
         const loki = new Loki()
         const context = createExecuteFunctions({
             items: 1,
@@ -227,5 +247,34 @@ describe('Loki node execute', () => {
         })
 
         await expect(loki.execute.call(context)).rejects.toBeInstanceOf(NodeApiError)
+    })
+
+    it('describes an unknown rejection without using object stringification', async () => {
+        httpRequestWithAuthentication.mockRejectedValue({ status: 500 })
+        const loki = new Loki()
+        const context = createExecuteFunctions({
+            items: 1,
+            paramsByItem: [defaultParams()],
+            httpRequestWithAuthentication
+        })
+
+        await expect(loki.execute.call(context)).rejects.toMatchObject({
+            description: expect.stringContaining('See the Loki response above')
+        })
+    })
+
+    it('continues on fail when the Loki request is rejected', async () => {
+        httpRequestWithAuthentication.mockRejectedValue(new Error('502 - gateway timeout'))
+        const loki = new Loki()
+        const context = createExecuteFunctions({
+            items: 1,
+            paramsByItem: [defaultParams()],
+            httpRequestWithAuthentication,
+            continueOnFail: true
+        })
+
+        const result = await loki.execute.call(context)
+
+        expect(result[0][0].json.error).toContain('502 - gateway timeout')
     })
 })

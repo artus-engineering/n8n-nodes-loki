@@ -150,7 +150,7 @@ export class LokiApi implements ICredentialType {
 
     test: ICredentialTestRequest = {
         request: {
-            baseURL: '={{ $credentials.url.trim().replace(/\\/+$/, "").replace(/\\/loki\\/api\\/v1(\\/push)?$/, "") }}',
+            baseURL: String.raw`={{ $credentials.url.trim().replace(/\/+$/, "").replace(/\/loki\/api\/v1(\/push)?$/, "") }}`,
             url: '/loki/api/v1/labels',
             method: 'GET'
         }
