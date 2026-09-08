@@ -1,0 +1,7 @@
+{
+    "extends": "./tsconfig.json",
+    "compilerOptions": {
+        "noEmit": true
+    },
+    "include": ["credentials/**/*", "nodes/**/*", "nodes/**/*.json", "package.json", "tests/**/*"]
+}

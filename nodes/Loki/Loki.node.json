@@ -1,0 +1,21 @@
+{
+    "node": "n8n-nodes-loki",
+    "nodeVersion": "1.0",
+    "codexVersion": "1.0",
+    "categories": ["Development", "Utility"],
+    "resources": {
+        "credentialDocumentation": [
+            {
+                "url": "https://github.com/artus-engineering/n8n-nodes-loki?tab=readme-ov-file#credential"
+            }
+        ],
+        "primaryDocumentation": [
+            {
+                "url": "https://github.com/artus-engineering/n8n-nodes-loki?tab=readme-ov-file"
+            },
+            {
+                "url": "https://grafana.com/docs/loki/latest/reference/loki-http-api/"
+            }
+        ]
+    }
+}

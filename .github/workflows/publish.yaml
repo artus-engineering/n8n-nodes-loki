@@ -1,0 +1,57 @@
+name: Publish NPM Package
+
+# n8n requires community nodes submitted for verification to be published via
+# GitHub Actions with an npm provenance statement (mandatory from 1 May 2026).
+# `npm publish --provenance` below, run from this workflow, satisfies that.
+
+on:
+  release:
+    types:
+      - published
+
+jobs:
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # mint the OIDC token for npm provenance / Trusted Publishing
+      contents: read
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24.x"
+          cache: "pnpm"
+          cache-dependency-path: "pnpm-lock.yaml"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint (Biome)
+        run: pnpm run lint
+
+      - name: Lint (n8n node/credential rules)
+        run: pnpm run lint:n8n
+
+      - name: Type check
+        run: pnpm run typecheck
+
+      - name: Update package.json version
+        run: |
+          VERSION="${{ github.event.release.tag_name }}"
+          VERSION="${VERSION#v}"
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Unit tests
+        run: pnpm run test
+
+      - name: Publish to npm
+        run: npm publish --provenance --access public

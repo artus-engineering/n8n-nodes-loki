@@ -1,0 +1,51 @@
+{
+    "name": "@artus-engineering/n8n-nodes-loki",
+    "version": "0.1.0",
+    "packageManager": "pnpm@11.24.0",
+    "description": "n8n community node to write log lines to Grafana Loki.",
+    "license": "MIT",
+    "homepage": "https://github.com/artus-engineering/n8n-nodes-loki#readme",
+    "keywords": ["n8n-community-node-package", "n8n", "loki", "grafana", "logging", "observability"],
+    "author": {
+        "name": "Artus Engineering GmbH",
+        "email": "hi@artus-engineering.de"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/artus-engineering/n8n-nodes-loki.git"
+    },
+    "bugs": {
+        "url": "https://github.com/artus-engineering/n8n-nodes-loki/issues"
+    },
+    "files": ["dist"],
+    "n8n": {
+        "n8nNodesApiVersion": 1,
+        "strict": true,
+        "credentials": ["dist/credentials/LokiApi.credentials.js"],
+        "nodes": ["dist/nodes/Loki/Loki.node.js"]
+    },
+    "scripts": {
+        "build": "n8n-node build && node scripts/clean-dist.mjs",
+        "dev": "n8n-node dev",
+        "format": "biome format --write .",
+        "lint": "biome check .",
+        "lint:fix": "biome check --write .",
+        "lint:n8n": "n8n-node lint",
+        "typecheck": "tsc -p tsconfig.test.json --noEmit",
+        "test": "vitest run --coverage",
+        "test:watch": "vitest"
+    },
+    "peerDependencies": {
+        "n8n-workflow": "*"
+    },
+    "devDependencies": {
+        "@biomejs/biome": "2.5.12",
+        "@n8n/node-cli": "0.47.0",
+        "@vitest/coverage-v8": "5.0.0",
+        "eslint": "9.39.4",
+        "lefthook": "2.1.12",
+        "n8n-workflow": "2.16.0",
+        "typescript": "5.9.3",
+        "vitest": "5.0.0"
+    }
+}

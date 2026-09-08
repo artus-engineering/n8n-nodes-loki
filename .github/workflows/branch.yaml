@@ -1,0 +1,98 @@
+name: "Branch"
+
+# Runner: ubuntu-latest (public repo) — see docs/ci.md.
+
+on:
+  push:
+    branches:
+      - main
+  # pull_request (not pull_request_target): checkout and analyze the PR head.
+  # pull_request_target checks out the base branch, so the scanner would treat the
+  # run as branch=main and fail the quality gate on the unfixed base.
+  pull_request:
+
+concurrency:
+  group: branch-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write # upload/download coverage artifact between jobs
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24.x"
+          cache: "pnpm"
+          cache-dependency-path: "pnpm-lock.yaml"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint (Biome)
+        run: pnpm run lint
+
+      - name: Lint (n8n node/credential rules)
+        run: pnpm run lint:n8n
+
+      - name: Type check
+        run: pnpm run typecheck
+
+      - name: Build package
+        run: pnpm run build
+
+      - name: Unit tests
+        run: pnpm run test
+
+      - name: Upload Unit Test Coverage (lcov) for SonarQube
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-lcov
+          path: coverage/lcov.info
+          if-no-files-found: error
+
+  scan:
+    name: SonarQube Scan
+    runs-on: ubuntu-latest
+    needs: tests
+    permissions:
+      contents: read
+      pull-requests: read # allows SonarQube to decorate PRs with analysis results
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # Shallow clones should be disabled for a better relevancy of analysis
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Download coverage report
+        uses: actions/download-artifact@v8
+        with:
+          name: coverage-lcov
+          path: coverage
+
+      - name: Analyze with SonarQube
+        uses: SonarSource/sonarqube-scan-action@v8
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        with:
+          args: ${{ github.event_name == 'pull_request' && format('-Dsonar.pullrequest.key={0} -Dsonar.pullrequest.branch={1} -Dsonar.pullrequest.base={2}', github.event.pull_request.number, github.event.pull_request.head.ref, github.event.pull_request.base.ref) || '' }}
+
+      - name: SonarQube Quality Gate
+        uses: SonarSource/sonarqube-quality-gate-action@v1
+        timeout-minutes: 5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}

@@ -1,0 +1,18 @@
+{
+    "mcpServers": {
+        "sonarqube": {
+            "command": "sonar",
+            "args": [
+                "run",
+                "mcp",
+                "--project",
+                "REPLACE_ME",
+                "--toolsets",
+                "analysis,ide,issues,quality-gates,rules,duplications,measures,security-hotspots,coverage"
+            ],
+            "env": {
+                "SONARQUBE_IDE_PORT": "64120"
+            }
+        }
+    }
+}

@@ -1,0 +1,178 @@
+{
+    "$schema": "https://biomejs.dev/schemas/2.5.12/schema.json",
+    "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+    "files": {
+        "includes": [
+            "**",
+            "!node_modules/**",
+            "!dist/**",
+            "!**/coverage/**",
+            "!**/*.tgz",
+            "!**/pnpm-lock.yaml",
+            "!**/package-lock.json",
+            "!**/yarn.lock",
+            "!**/*.config.js",
+            "!eslint.config.mjs"
+        ]
+    },
+    "formatter": {
+        "enabled": true,
+        "formatWithErrors": false,
+        "indentStyle": "space",
+        "indentWidth": 4,
+        "lineEnding": "lf",
+        "lineWidth": 120,
+        "attributePosition": "auto",
+        "bracketSameLine": false,
+        "bracketSpacing": true,
+        "expand": "auto",
+        "useEditorconfig": true
+    },
+    "linter": {
+        "enabled": true,
+        "rules": {
+            "preset": "none",
+            "complexity": {
+                "noAdjacentSpacesInRegex": "error",
+                "noExtraBooleanCast": "error",
+                "noUselessCatch": "error",
+                "noUselessEscapeInRegex": "error"
+            },
+            "correctness": {
+                "noConstAssign": "error",
+                "noConstantCondition": "error",
+                "noEmptyCharacterClassInRegex": "error",
+                "noEmptyPattern": "error",
+                "noGlobalObjectCalls": "error",
+                "noInvalidBuiltinInstantiation": "error",
+                "noInvalidConstructorSuper": "error",
+                "noNonoctalDecimalEscape": "error",
+                "noPrecisionLoss": "error",
+                "noSelfAssign": "error",
+                "noSetterReturn": "error",
+                "noSwitchDeclarations": "error",
+                "noUndeclaredVariables": "error",
+                "noUnreachable": "error",
+                "noUnreachableSuper": "error",
+                "noUnsafeFinally": "error",
+                "noUnsafeOptionalChaining": "error",
+                "noUnusedLabels": "error",
+                "noUnusedPrivateClassMembers": "error",
+                "noUnusedVariables": "error",
+                "useIsNan": "error",
+                "useValidForDirection": "error",
+                "useValidTypeof": "error",
+                "useYield": "error"
+            },
+            "style": { "useBlockStatements": "off" },
+            "suspicious": {
+                "noAsyncPromiseExecutor": "error",
+                "noCatchAssign": "error",
+                "noClassAssign": "error",
+                "noCompareNegZero": "error",
+                "noConstantBinaryExpressions": "error",
+                "noControlCharactersInRegex": "error",
+                "noDebugger": "error",
+                "noDuplicateCase": "error",
+                "noDuplicateClassMembers": "error",
+                "noDuplicateElseIf": "error",
+                "noDuplicateObjectKeys": "error",
+                "noDuplicateParameters": "error",
+                "noEmptyBlockStatements": "error",
+                "noFallthroughSwitchClause": "error",
+                "noFunctionAssign": "error",
+                "noGlobalAssign": "error",
+                "noImportAssign": "error",
+                "noIrregularWhitespace": "error",
+                "noMisleadingCharacterClass": "error",
+                "noPrototypeBuiltins": "error",
+                "noRedeclare": "error",
+                "noShadowRestrictedNames": "error",
+                "noSparseArray": "error",
+                "noUnsafeNegation": "error",
+                "noUselessRegexBackrefs": "error",
+                "noWith": "error",
+                "useGetterReturn": "error"
+            }
+        },
+        "includes": [
+            "**",
+            "!node_modules/**",
+            "!dist/**",
+            "!**/coverage/**",
+            "!**/*.tgz",
+            "!**/pnpm-lock.yaml",
+            "!**/package-lock.json",
+            "!**/yarn.lock",
+            "!**/*.config.js",
+            "!eslint.config.mjs"
+        ]
+    },
+    "javascript": {
+        "formatter": {
+            "quoteProperties": "asNeeded",
+            "trailingCommas": "none",
+            "semicolons": "asNeeded",
+            "arrowParentheses": "asNeeded",
+            "bracketSameLine": false,
+            "quoteStyle": "single",
+            "attributePosition": "auto",
+            "bracketSpacing": true
+        }
+    },
+    "json": {
+        "formatter": {
+            "trailingCommas": "none"
+        }
+    },
+    "overrides": [
+        {
+            "includes": ["**/*.ts"],
+            "linter": {
+                "rules": {
+                    "complexity": { "noUselessTypeConstraint": "error" },
+                    "correctness": { "noUnusedVariables": "warn" },
+                    "style": {
+                        "noCommonJs": "off",
+                        "noNamespace": "error",
+                        "useArrayLiterals": "error",
+                        "useAsConstAssertion": "error",
+                        "useConst": "warn"
+                    },
+                    "suspicious": {
+                        "noCommentText": "error",
+                        "noConsole": { "level": "warn", "options": { "allow": ["warn", "error"] } },
+                        "noExplicitAny": "off",
+                        "noExtraNonNullAssertion": "error",
+                        "noMisleadingInstantiator": "error",
+                        "noNonNullAssertedOptionalChain": "error",
+                        "noUnsafeDeclarationMerging": "error",
+                        "noUnusedExpressions": "off",
+                        "noVar": "error",
+                        "useNamespaceKeyword": "error"
+                    }
+                }
+            }
+        },
+        {
+            "includes": ["**/*.test.ts", "**/__tests__/**/*.ts"],
+            "javascript": {
+                "globals": ["describe", "expect", "it", "beforeEach", "afterEach", "beforeAll", "afterAll", "vi"]
+            },
+            "linter": {
+                "rules": {
+                    "correctness": { "noUndeclaredVariables": "off" },
+                    "suspicious": { "noExplicitAny": "off" }
+                }
+            }
+        },
+        { "includes": ["**/*.d.ts"], "linter": { "rules": {} } },
+        {
+            "includes": ["**/*.config.ts", "**/*.config.mjs"],
+            "javascript": {
+                "globals": ["process", "__dirname"]
+            }
+        }
+    ],
+    "assist": { "enabled": true, "actions": { "source": { "organizeImports": "on" } } }
+}

@@ -1,0 +1,22 @@
+# Directories
+.cursor
+.github
+.sonarlint
+.vscode
+docs
+tests
+assets
+
+# Files
+*.md
+*.json
+*.config.js
+*.config.ts
+*.config.mjs
+!package.json
+!README.md
+!nodes/**/*.json
+
+# Source maps (exclude from package to reduce size)
+**/*.map
+dist/**/*.map
