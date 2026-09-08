@@ -6,7 +6,7 @@
                 "run",
                 "mcp",
                 "--project",
-                "REPLACE_ME",
+                "artus-engineering_n8n-nodes-loki_f771277c-125c-400f-aca0-df3d8c63b594",
                 "--toolsets",
                 "analysis,ide,issues,quality-gates,rules,duplications,measures,security-hotspots,coverage"
             ],

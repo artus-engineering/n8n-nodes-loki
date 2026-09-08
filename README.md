@@ -10,7 +10,7 @@
   <a href="https://www.npmjs.com/package/@artus-engineering/n8n-nodes-loki"><img alt="NPM Version" src="https://img.shields.io/npm/v/%40artus-engineering%2Fn8n-nodes-loki"></a>
   <a href="https://github.com/artus-engineering/n8n-nodes-loki/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/badge/License-MIT-8b5cf6"></a>
   <a href="https://github.com/artus-engineering/n8n-nodes-loki/actions/workflows/branch.yaml"><img alt="CI Status" src="https://img.shields.io/github/actions/workflow/status/artus-engineering/n8n-nodes-loki/.github%2Fworkflows%2Fbranch.yaml?label=CI&logo=GitHub"></a>
-  <a href="https://sonar.artus-engineering.de/dashboard?id=REPLACE_ME"><img alt="SonarQube Quality Gate" src="https://sonar.artus-engineering.de/api/project_badges/measure?project=REPLACE_ME&metric=alert_status"></a>
+  <a href="https://sonar.artus-engineering.de/dashboard?id=artus-engineering_n8n-nodes-loki_f771277c-125c-400f-aca0-df3d8c63b594"><img alt="SonarQube Quality Gate" src="https://sonar.artus-engineering.de/api/project_badges/measure?project=artus-engineering_n8n-nodes-loki_f771277c-125c-400f-aca0-df3d8c63b594&metric=alert_status"></a>
   <img alt="n8n community node" src="https://img.shields.io/badge/n8n-community--node-ea4b71?logo=n8n&logoColor=white">
 </div>
 
