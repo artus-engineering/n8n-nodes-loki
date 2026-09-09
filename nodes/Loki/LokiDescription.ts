@@ -121,7 +121,7 @@ export const lokiProperties: INodeProperties[] = [
                 name: 'batchAllItems',
                 type: 'boolean',
                 default: true,
-                displayOptions: { show: { operation: ['push'] } },
+                displayOptions: { show: { '/operation': ['push'] } },
                 description:
                     'Whether to send all input items to Loki in a single push request instead of one request per item'
             },
@@ -158,7 +158,7 @@ export const lokiProperties: INodeProperties[] = [
                 name: 'timestamp',
                 type: 'string',
                 default: '',
-                displayOptions: { show: { operation: ['push'] } },
+                displayOptions: { show: { '/operation': ['push'] } },
                 placeholder: 'e.g. 2024-01-01T00:00:00Z, or leave empty for now',
                 description:
                     'ISO-8601 timestamp or epoch number (seconds, milliseconds, microseconds or nanoseconds are auto-detected). Defaults to the current time.'
