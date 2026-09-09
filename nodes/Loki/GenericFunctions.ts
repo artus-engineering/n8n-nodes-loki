@@ -1,7 +1,8 @@
-import { type INode, NodeOperationError } from 'n8n-workflow'
+import { type INode, NodeOperationError, type NodeParameterValueType, type NodeTypeAndVersion } from 'n8n-workflow'
 
 const LABEL_NAME_PATTERN = /^[a-zA-Z_]\w*$/
 const DEFAULT_JOB_LABEL = 'n8n'
+const EXECUTE_WORKFLOW_TRIGGER_TYPE = 'n8n-nodes-base.executeWorkflowTrigger'
 
 export interface LokiLogEntry {
     labels: Record<string, string>
@@ -357,4 +358,231 @@ export function buildStreams(entries: LokiLogEntry[], node: INode): LokiStream[]
     }
 
     return [...streamsByKey.values()]
+}
+
+export interface WorkflowLoggingSettings {
+    name: string
+    loggingEnabled: NodeParameterValueType | undefined
+    labels: unknown
+    additionalHeaders: unknown
+    structuredMetadata: unknown
+    timeout: unknown
+}
+
+export interface ResolvedWorkflowDefaults {
+    enabled: boolean
+    labels: Record<string, string>
+    additionalHeaders: Record<string, string>
+    structuredMetadata: Record<string, string>
+    timeout?: number
+}
+
+/**
+ * Finds enabled "Set Workflow Logging" control nodes among the given
+ * ancestors. Disabled canvas nodes are skipped. Raw parameter values are
+ * returned as stored — unset `loggingEnabled` (n8n omits default `true`)
+ * is left undefined so callers treat it as enabled.
+ */
+export function findWorkflowLoggingSettings(
+    parents: NodeTypeAndVersion[],
+    nodeType: string
+): WorkflowLoggingSettings[] {
+    const settings: WorkflowLoggingSettings[] = []
+
+    for (const parent of parents) {
+        if (parent.type !== nodeType || parent.disabled) {
+            continue
+        }
+        if (parent.parameters?.operation !== 'setWorkflowLogging') {
+            continue
+        }
+        const options =
+            parent.parameters.options && typeof parent.parameters.options === 'object'
+                ? (parent.parameters.options as Record<string, unknown>)
+                : {}
+        settings.push({
+            name: parent.name,
+            loggingEnabled: parent.parameters.loggingEnabled as NodeParameterValueType | undefined,
+            labels: parent.parameters.labels,
+            additionalHeaders: options.additionalHeaders,
+            structuredMetadata: options.structuredMetadata,
+            timeout: options.timeout
+        })
+    }
+
+    return settings
+}
+
+function resolveExpressionValue(value: unknown, resolveValue: (value: unknown) => unknown): unknown {
+    if (typeof value === 'string' && value.startsWith('=')) {
+        return resolveValue(value.slice(1))
+    }
+    return value
+}
+
+function resolveNameValueMap(raw: unknown, resolveValue: (value: unknown) => unknown): Record<string, string> {
+    const mapped: Record<string, string> = {}
+    for (const { name, value } of normalizeNameValueRows(raw)) {
+        mapped[name] = stringifyAssignmentValue(resolveExpressionValue(value, resolveValue))
+    }
+    return mapped
+}
+
+/**
+ * Coerces a stored or resolved timeout to a number of milliseconds. Numeric
+ * strings are accepted because an expression can resolve to one.
+ */
+export function coerceTimeout(value: unknown): number | undefined {
+    if (typeof value === 'number') {
+        return Number.isFinite(value) ? value : undefined
+    }
+    if (typeof value === 'string' && value !== '') {
+        const parsed = Number(value)
+        return Number.isFinite(parsed) ? parsed : undefined
+    }
+    return undefined
+}
+
+function resolveTimeout(raw: unknown, resolveValue: (value: unknown) => unknown): number | undefined {
+    if (raw === undefined || raw === null || raw === '') {
+        return undefined
+    }
+    return coerceTimeout(resolveExpressionValue(raw, resolveValue))
+}
+
+/**
+ * Key under which a "Set Workflow Logging" node writes its resolved settings
+ * onto every item it passes through. This is the only channel that survives an
+ * Execute Sub-workflow call, so it is how the switch reaches sub-workflows.
+ */
+export const WORKFLOW_LOGGING_ITEM_KEY = '_lokiLogging'
+
+export function emptyWorkflowDefaults(): ResolvedWorkflowDefaults {
+    return { enabled: true, labels: {}, additionalHeaders: {}, structuredMetadata: {} }
+}
+
+function toStringMap(raw: unknown): Record<string, string> {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+        return {}
+    }
+    const map: Record<string, string> = {}
+    for (const [name, value] of Object.entries(raw as Record<string, unknown>)) {
+        if (name.length > 0) {
+            map[name] = stringifyAssignmentValue(value)
+        }
+    }
+    return map
+}
+
+/**
+ * Reads defaults a control node propagated on an item. The value comes from
+ * the item stream and may have been reshaped by other nodes, so every field is
+ * coerced rather than trusted.
+ */
+export function readPropagatedDefaults(raw: unknown): ResolvedWorkflowDefaults | undefined {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+        return undefined
+    }
+    const record = raw as Record<string, unknown>
+    return {
+        enabled: record.enabled !== false && record.enabled !== 'false',
+        labels: toStringMap(record.labels),
+        additionalHeaders: toStringMap(record.additionalHeaders),
+        structuredMetadata: toStringMap(record.structuredMetadata),
+        timeout: coerceTimeout(record.timeout)
+    }
+}
+
+/**
+ * Trims resolved defaults down to what is worth carrying on every item: empty
+ * maps and an unset timeout are dropped, since `readPropagatedDefaults` fills
+ * them back in.
+ */
+export function toPropagatedDefaults(defaults: ResolvedWorkflowDefaults): Record<string, unknown> {
+    const propagated: Record<string, unknown> = { enabled: defaults.enabled }
+    if (Object.keys(defaults.labels).length > 0) {
+        propagated.labels = defaults.labels
+    }
+    if (Object.keys(defaults.additionalHeaders).length > 0) {
+        propagated.additionalHeaders = defaults.additionalHeaders
+    }
+    if (Object.keys(defaults.structuredMetadata).length > 0) {
+        propagated.structuredMetadata = defaults.structuredMetadata
+    }
+    if (defaults.timeout !== undefined) {
+        propagated.timeout = defaults.timeout
+    }
+    return propagated
+}
+
+/**
+ * Layers `override` (the nearer control node) on top of `base` (an inherited
+ * or more distant one). Logging stays off once either side turned it off.
+ */
+export function mergeResolvedDefaults(
+    base: ResolvedWorkflowDefaults,
+    override: ResolvedWorkflowDefaults
+): ResolvedWorkflowDefaults {
+    return {
+        enabled: base.enabled && override.enabled,
+        labels: { ...base.labels, ...override.labels },
+        additionalHeaders: { ...base.additionalHeaders, ...override.additionalHeaders },
+        structuredMetadata: { ...base.structuredMetadata, ...override.structuredMetadata },
+        timeout: override.timeout ?? base.timeout
+    }
+}
+
+/**
+ * Name of the ancestor that starts a sub-workflow run, if there is one. Its
+ * output items carry the settings the calling workflow propagated.
+ */
+export function findSubWorkflowTrigger(parents: NodeTypeAndVersion[]): string | undefined {
+    for (const parent of parents) {
+        if (parent.type === EXECUTE_WORKFLOW_TRIGGER_TYPE && !parent.disabled) {
+            return parent.name
+        }
+    }
+    return undefined
+}
+
+/**
+ * Merges control-node snapshots into workflow defaults. `settings` is expected
+ * in the order `getParentNodes` returns - furthest ancestor first - so the
+ * last-wins merge of maps and timeout lets the nearest control node win. Any
+ * resolved `false` disables logging; a later control node cannot re-enable it.
+ */
+export function mergeWorkflowDefaults(
+    settings: WorkflowLoggingSettings[],
+    resolveValue: (value: unknown) => unknown,
+    node: INode
+): ResolvedWorkflowDefaults {
+    const defaults = emptyWorkflowDefaults()
+
+    for (const setting of settings) {
+        const resolve = (value: unknown) => {
+            try {
+                return resolveValue(value)
+            } catch (error) {
+                throw new NodeOperationError(node, error as Error, {
+                    description: `The expression is set on the "${setting.name}" node (Set Workflow Logging) and is evaluated in this node's context.`
+                })
+            }
+        }
+
+        const loggingEnabled = resolveExpressionValue(setting.loggingEnabled, resolve)
+        if (loggingEnabled === false || loggingEnabled === 'false') {
+            defaults.enabled = false
+        }
+
+        Object.assign(defaults.labels, resolveNameValueMap(setting.labels, resolve))
+        Object.assign(defaults.additionalHeaders, resolveNameValueMap(setting.additionalHeaders, resolve))
+        Object.assign(defaults.structuredMetadata, resolveNameValueMap(setting.structuredMetadata, resolve))
+
+        const timeout = resolveTimeout(setting.timeout, resolve)
+        if (timeout !== undefined) {
+            defaults.timeout = timeout
+        }
+    }
+
+    return defaults
 }
