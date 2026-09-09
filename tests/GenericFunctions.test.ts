@@ -267,16 +267,20 @@ describe('buildStreams', () => {
 describe('buildContextLabels', () => {
     it('maps workflow name and id onto label names', () => {
         expect(buildContextLabels({ workflowId: 'wf-1', workflowName: 'Observability' })).toEqual({
+            job: 'n8n',
             workflow: 'Observability',
             workflow_id: 'wf-1'
         })
     })
 
-    it('omits missing and blank values', () => {
-        expect(buildContextLabels({})).toEqual({})
-        expect(buildContextLabels({ workflowId: '  ', workflowName: '' })).toEqual({})
-        expect(buildContextLabels({ workflowId: 'wf-1' })).toEqual({ workflow_id: 'wf-1' })
-        expect(buildContextLabels({ workflowName: ' Observability ' })).toEqual({ workflow: 'Observability' })
+    it('always includes job and omits missing or blank workflow values', () => {
+        expect(buildContextLabels({})).toEqual({ job: 'n8n' })
+        expect(buildContextLabels({ workflowId: '  ', workflowName: '' })).toEqual({ job: 'n8n' })
+        expect(buildContextLabels({ workflowId: 'wf-1' })).toEqual({ job: 'n8n', workflow_id: 'wf-1' })
+        expect(buildContextLabels({ workflowName: ' Observability ' })).toEqual({
+            job: 'n8n',
+            workflow: 'Observability'
+        })
     })
 })
 

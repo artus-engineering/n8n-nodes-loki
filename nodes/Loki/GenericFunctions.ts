@@ -1,6 +1,7 @@
 import { type INode, NodeOperationError } from 'n8n-workflow'
 
 const LABEL_NAME_PATTERN = /^[a-zA-Z_]\w*$/
+const DEFAULT_JOB_LABEL = 'n8n'
 
 export interface LokiLogEntry {
     labels: Record<string, string>
@@ -25,7 +26,7 @@ function presentValue(value: string | undefined): string | undefined {
  * High-cardinality values such as the execution ID belong in structured metadata.
  */
 export function buildContextLabels(context: N8nContext): Record<string, string> {
-    const labels: Record<string, string> = {}
+    const labels: Record<string, string> = { job: DEFAULT_JOB_LABEL }
     const workflowName = presentValue(context.workflowName)
     const workflowId = presentValue(context.workflowId)
     if (workflowName) {
