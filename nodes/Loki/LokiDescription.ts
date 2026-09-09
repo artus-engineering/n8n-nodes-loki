@@ -117,6 +117,15 @@ export const lokiProperties: INodeProperties[] = [
                 ]
             },
             {
+                displayName: 'Propagate to Sub-Workflows',
+                name: 'propagateToSubWorkflows',
+                type: 'boolean',
+                default: true,
+                displayOptions: { show: { '/operation': ['setWorkflowLogging'] } },
+                description:
+                    'Whether to write the resolved settings onto every item as "_lokiLogging", so Loki nodes in workflows started further down (Execute Sub-workflow) inherit them. Turn off to leave the items untouched; the switch then only applies inside this workflow.'
+            },
+            {
                 displayName: 'Send All Items in One Request',
                 name: 'batchAllItems',
                 type: 'boolean',

@@ -31,6 +31,7 @@
   - [Options](#options)
 - [Automatic n8n context](#automatic-n8n-context)
 - [Workflow-level logging toggle](#workflow-level-logging-toggle)
+  - [Sub-workflows](#sub-workflows)
 - [Usage](#usage)
   - [Plain text](#plain-text)
   - [Free-form JSON](#free-form-json)
@@ -49,7 +50,7 @@
 - **Plain text or JSON messages** — Free-form JSON, or build a JSON object from typed key/value fields, no manual `JSON.stringify` needed
 - **Automatic n8n context** — Every entry gets `job`, `workflow` and `workflow_id` stream labels plus the execution ID as structured metadata
 - **Labels & structured metadata** — Set additional Loki stream labels and per-entry structured metadata from the node UI
-- **Workflow-level mute** — A `Set Workflow Logging` operation on one Loki node turns logging off for every Loki node downstream, without disabling each one
+- **Workflow-level mute** — A `Set Workflow Logging` operation on one Loki node turns logging off for every Loki node downstream, sub-workflows included, without disabling each one
 - **Batching** — Send all input items in a single push request (grouped into streams by label set), or one request per item
 - **Zero runtime dependencies** — Uses n8n's built-in HTTP helpers only, per n8n's community node requirements
 - **Full TypeScript support** — Written in strict TypeScript against `n8n-workflow`'s types
@@ -111,6 +112,7 @@ Use **Test** on the credential to verify connectivity (calls `GET /loki/api/v1/l
 | **Send All Items in One Request** | Default on. Groups all input items into one push request (still split into separate streams per distinct label set); disable to send one request per item. Send Log only |
 | **Additional Headers** | Extra headers for this request, layered on top of the credential's. Also available on Set Workflow Logging as a default for downstream nodes |
 | **Timeout** | Request timeout in ms (default `10000`). Also available on Set Workflow Logging as a default for downstream nodes |
+| **Propagate to Sub-Workflows** | Set Workflow Logging only, default on. Writes the resolved settings onto every item as `_lokiLogging` so sub-workflows inherit them |
 
 ## Automatic n8n context
 
@@ -140,13 +142,23 @@ How later `Send Log` nodes resolve the switch and defaults:
 - No control node upstream, or `Logging Enabled` left at its default / unset → logging stays on
 - Any enabled upstream control node resolving to off disables logging ("off wins")
 - A control node that is itself disabled on the canvas is ignored, so disabling that node is the quick way to restore logging
-- The control node can use an expression (`={{ $vars.LOKI_ENABLED }}`). The expression is evaluated in the *reading* Loki node's context, not on the control node
+- The control node can use an expression (`={{ $vars.LOKI_ENABLED }}`). Expressions on a control node in the *same* workflow are evaluated in the reading Loki node's context; `Logging Enabled`, `Timeout` and `Additional Headers` are resolved once against the first input item, `Labels` and `Structured Metadata` per item
+- An expression that resolves to something other than `false` (including an unset variable) leaves logging on — the switch fails open
 - When logging is off, each `Send Log` node passes its input items through unchanged and does not call Loki
 - Workflow labels / headers / metadata are merged under the automatic n8n context; a same-name field on the Send Log node overrides the workflow default
 - Workflow Timeout is used when the Send Log node has not added Timeout itself; a local Timeout always wins
-- Several enabled control nodes merge in ancestor-list order (later entries win on colliding keys)
+- Several enabled control nodes merge nearest-last, so the control node closest to the Send Log node wins on colliding keys
 
 The control operation does not require a Loki credential. Also skip `Send All Items in One Request` and `Timestamp` on the control node — those stay per Send Log node.
+
+### Sub-workflows
+
+Nothing about a running workflow is visible from a sub-workflow, so the settings travel with the data: a control node writes them onto every item it passes through, under `_lokiLogging`. `Execute Sub-workflow` hands those items to the sub-workflow, where Loki nodes pick them up again — from their own input item, or from the `Execute Sub-workflow Trigger` if nodes in between rebuilt the items.
+
+- Off stays off: a sub-workflow cannot re-enable logging its caller muted. A control node inside the sub-workflow can add labels, headers, metadata and a timeout on top, and merges the inherited settings into what it propagates further down, so nesting works to any depth
+- The `Execute Sub-workflow Trigger` must accept the extra field. With **Input data mode** set to `Define using fields below`, n8n drops everything outside the declared schema — including `_lokiLogging` — so use `Accept all data`, or declare a `_lokiLogging` field
+- Turn the `Propagate to Sub-Workflows` option off to leave the items untouched; the switch then applies inside the current workflow only
+- A Loki node used as an **AI tool** is not connected into the main flow and receives no items from it, so the switch does not reach it — mute those nodes on the canvas instead
 
 ## Usage
 

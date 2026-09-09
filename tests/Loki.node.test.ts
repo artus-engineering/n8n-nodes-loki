@@ -1,5 +1,5 @@
 import type { IExecuteFunctions, INode, NodeTypeAndVersion } from 'n8n-workflow'
-import { NodeApiError } from 'n8n-workflow'
+import { NodeApiError, NodeOperationError } from 'n8n-workflow'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Loki } from '../nodes/Loki/Loki.node'
 
@@ -27,6 +27,7 @@ interface StubOptions {
     executionId?: string
     parentNodes?: NodeTypeAndVersion[]
     evaluateExpression?: (expression: string, itemIndex: number) => unknown
+    itemJson?: Array<Record<string, unknown>>
 }
 
 function createExecuteFunctions(opts: StubOptions): IExecuteFunctions {
@@ -39,7 +40,9 @@ function createExecuteFunctions(opts: StubOptions): IExecuteFunctions {
         parameters: {}
     }
 
-    const items = Array.from({ length: opts.items }, (_, index) => ({ json: { item: index } }))
+    const items = Array.from({ length: opts.items }, (_, index) => ({
+        json: { item: index, ...(opts.itemJson?.[index] ?? {}) }
+    }))
 
     const stub = {
         getInputData: () => items,
@@ -569,11 +572,96 @@ describe('Loki node execute', () => {
         })
     })
 
-    it('passes items through without credentials when the operation is Set Workflow Logging', async () => {
+    it('tags items with the resolved settings when the operation is Set Workflow Logging', async () => {
         const loki = new Loki()
+        const controlParams = {
+            operation: 'setWorkflowLogging',
+            loggingEnabled: false,
+            labels: { assignments: [{ name: 'env', value: 'prod', type: 'string' }] },
+            options: { timeout: 5000 }
+        }
         const context = createExecuteFunctions({
             items: 2,
-            paramsByItem: [{ operation: 'setWorkflowLogging', loggingEnabled: false }],
+            paramsByItem: [controlParams, controlParams],
+            httpRequestWithAuthentication
+        })
+
+        const result = await loki.execute.call(context)
+
+        expect(result[0]).toEqual([
+            { json: { item: 0, _lokiLogging: { enabled: false, labels: { env: 'prod' }, timeout: 5000 } } },
+            { json: { item: 1, _lokiLogging: { enabled: false, labels: { env: 'prod' }, timeout: 5000 } } }
+        ])
+        expect(httpRequestWithAuthentication).not.toHaveBeenCalled()
+        expect(context.getCredentials).not.toHaveBeenCalled()
+    })
+
+    it('leaves items untouched when propagation to sub-workflows is turned off', async () => {
+        const loki = new Loki()
+        const controlParams = {
+            operation: 'setWorkflowLogging',
+            loggingEnabled: false,
+            options: { propagateToSubWorkflows: false }
+        }
+        const context = createExecuteFunctions({
+            items: 1,
+            paramsByItem: [controlParams],
+            httpRequestWithAuthentication
+        })
+
+        const result = await loki.execute.call(context)
+
+        expect(result).toEqual([context.getInputData()])
+    })
+
+    it('folds an upstream control node and inherited settings into what it propagates', async () => {
+        const loki = new Loki()
+        const context = createExecuteFunctions({
+            items: 1,
+            itemJson: [
+                {
+                    _lokiLogging: {
+                        labels: { env: 'prod', tenant: 'acme' },
+                        additionalHeaders: { 'X-Trace': 'inherited' },
+                        timeout: 5000
+                    }
+                }
+            ],
+            paramsByItem: [
+                {
+                    operation: 'setWorkflowLogging',
+                    labels: { assignments: [{ name: 'env', value: 'staging', type: 'string' }] }
+                }
+            ],
+            httpRequestWithAuthentication,
+            parentNodes: [
+                controlNode({
+                    name: 'Outer Settings',
+                    parameters: {
+                        operation: 'setWorkflowLogging',
+                        options: { structuredMetadata: { metadata: [{ name: 'region', value: 'eu' }] } }
+                    }
+                })
+            ]
+        })
+
+        const result = await loki.execute.call(context)
+
+        expect(result[0][0].json._lokiLogging).toEqual({
+            enabled: true,
+            labels: { env: 'staging', tenant: 'acme' },
+            additionalHeaders: { 'X-Trace': 'inherited' },
+            structuredMetadata: { region: 'eu' },
+            timeout: 5000
+        })
+    })
+
+    it('mutes a Send Log node from settings inherited on its input item', async () => {
+        const loki = new Loki()
+        const context = createExecuteFunctions({
+            items: 1,
+            itemJson: [{ _lokiLogging: { enabled: false } }],
+            paramsByItem: [defaultParams()],
             httpRequestWithAuthentication
         })
 
@@ -582,5 +670,153 @@ describe('Loki node execute', () => {
         expect(result).toEqual([context.getInputData()])
         expect(httpRequestWithAuthentication).not.toHaveBeenCalled()
         expect(context.getCredentials).not.toHaveBeenCalled()
+    })
+
+    it('mutes a Send Log node from settings on the sub-workflow trigger when the items were rebuilt', async () => {
+        const loki = new Loki()
+        const context = createExecuteFunctions({
+            items: 1,
+            paramsByItem: [defaultParams()],
+            httpRequestWithAuthentication,
+            parentNodes: [
+                {
+                    name: 'When Executed by Another Workflow',
+                    type: 'n8n-nodes-base.executeWorkflowTrigger',
+                    typeVersion: 1,
+                    disabled: false
+                }
+            ],
+            evaluateExpression: expression =>
+                expression.includes('When Executed by Another Workflow') ? { enabled: false } : undefined
+        })
+
+        const result = await loki.execute.call(context)
+
+        expect(result).toEqual([context.getInputData()])
+        expect(httpRequestWithAuthentication).not.toHaveBeenCalled()
+    })
+
+    it('inherits labels from the sub-workflow trigger and lets a local control node override them', async () => {
+        const loki = new Loki()
+        const withoutTimeout = { ...(defaultParams().options as Record<string, unknown>) }
+        delete withoutTimeout.timeout
+        const context = createExecuteFunctions({
+            items: 1,
+            paramsByItem: [defaultParams({ options: withoutTimeout })],
+            httpRequestWithAuthentication,
+            parentNodes: [
+                {
+                    name: 'Sub Trigger',
+                    type: 'n8n-nodes-base.executeWorkflowTrigger',
+                    typeVersion: 1,
+                    disabled: false
+                },
+                controlNode({
+                    parameters: {
+                        operation: 'setWorkflowLogging',
+                        labels: { assignments: [{ name: 'env', value: 'local', type: 'string' }] }
+                    }
+                })
+            ],
+            evaluateExpression: expression =>
+                expression.includes('Sub Trigger')
+                    ? { labels: { env: 'inherited', tenant: 'acme' }, timeout: 7000 }
+                    : undefined
+        })
+
+        await loki.execute.call(context)
+
+        const [, requestOptions] = httpRequestWithAuthentication.mock.calls[0]
+        expect(requestOptions.timeout).toBe(7000)
+        expect(requestOptions.body.streams[0].stream).toMatchObject({ env: 'local', tenant: 'acme' })
+    })
+
+    it('pushes normally when the sub-workflow trigger has no data to read', async () => {
+        const loki = new Loki()
+        const context = createExecuteFunctions({
+            items: 1,
+            paramsByItem: [defaultParams()],
+            httpRequestWithAuthentication,
+            parentNodes: [
+                {
+                    name: 'Sub Trigger',
+                    type: 'n8n-nodes-base.executeWorkflowTrigger',
+                    typeVersion: 1,
+                    disabled: false
+                }
+            ],
+            evaluateExpression: () => {
+                throw new Error('Referenced node is unexecuted')
+            }
+        })
+
+        await loki.execute.call(context)
+
+        expect(httpRequestWithAuthentication).toHaveBeenCalledTimes(1)
+    })
+
+    it('resolves workflow-wide label expressions per item', async () => {
+        const loki = new Loki()
+        const context = createExecuteFunctions({
+            items: 2,
+            paramsByItem: [defaultParams(), defaultParams()],
+            httpRequestWithAuthentication,
+            parentNodes: [
+                controlNode({
+                    parameters: {
+                        operation: 'setWorkflowLogging',
+                        labels: { assignments: [{ name: 'tenant', value: '={{ $json.tenant }}', type: 'string' }] }
+                    }
+                })
+            ],
+            evaluateExpression: (_expression, itemIndex) => `tenant-${itemIndex}`
+        })
+
+        await loki.execute.call(context)
+
+        const [, requestOptions] = httpRequestWithAuthentication.mock.calls[0]
+        expect(
+            requestOptions.body.streams.map((stream: { stream: Record<string, string> }) => stream.stream.tenant)
+        ).toEqual(['tenant-0', 'tenant-1'])
+    })
+
+    it('prefers a local timeout that an expression resolved to a numeric string', async () => {
+        const loki = new Loki()
+        const context = createExecuteFunctions({
+            items: 1,
+            paramsByItem: [
+                defaultParams({
+                    options: { ...(defaultParams().options as Record<string, unknown>), timeout: '15000' }
+                })
+            ],
+            httpRequestWithAuthentication,
+            parentNodes: [controlNode({ parameters: { operation: 'setWorkflowLogging', options: { timeout: 5000 } } })]
+        })
+
+        await loki.execute.call(context)
+
+        const [, requestOptions] = httpRequestWithAuthentication.mock.calls[0]
+        expect(requestOptions.timeout).toBe(15000)
+    })
+
+    it('reports which control node an expression failure came from', async () => {
+        const loki = new Loki()
+        const context = createExecuteFunctions({
+            items: 1,
+            paramsByItem: [defaultParams()],
+            httpRequestWithAuthentication,
+            parentNodes: [
+                controlNode({
+                    name: 'Mute Switch',
+                    parameters: { operation: 'setWorkflowLogging', loggingEnabled: '={{ $json.flag }}' }
+                })
+            ],
+            evaluateExpression: () => {
+                throw new Error('Referenced node is unexecuted')
+            }
+        })
+
+        await expect(loki.execute.call(context)).rejects.toThrowError(NodeOperationError)
+        await expect(loki.execute.call(context)).rejects.toThrowError(/Referenced node is unexecuted/)
     })
 })

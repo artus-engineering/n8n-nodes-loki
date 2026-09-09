@@ -14,14 +14,22 @@ import {
     buildContextLabels,
     buildContextMetadata,
     buildStreams,
+    coerceTimeout,
+    emptyWorkflowDefaults,
+    findSubWorkflowTrigger,
     findWorkflowLoggingSettings,
     type LokiLogEntry,
+    mergeResolvedDefaults,
     mergeWorkflowDefaults,
     normalizeNameValueRows,
     type ResolvedWorkflowDefaults,
+    readPropagatedDefaults,
     resolvePushUrl,
     serializeLogLine,
-    toNanoseconds
+    toNanoseconds,
+    toPropagatedDefaults,
+    WORKFLOW_LOGGING_ITEM_KEY,
+    type WorkflowLoggingSettings
 } from './GenericFunctions'
 import { lokiProperties } from './LokiDescription'
 
@@ -103,11 +111,97 @@ interface IndexedEntry {
     itemIndex: number
 }
 
-function readWorkflowDefaults(this: IExecuteFunctions): ResolvedWorkflowDefaults {
+interface WorkflowContext {
+    settings: WorkflowLoggingSettings[]
+    subWorkflowTrigger?: string
+}
+
+function readWorkflowContext(this: IExecuteFunctions): WorkflowContext {
     const parents = this.getParentNodes?.(this.getNode().name, { includeNodeParameters: true }) ?? []
-    return mergeWorkflowDefaults(findWorkflowLoggingSettings(parents, this.getNode().type), value =>
-        this.evaluateExpression(value as string, 0)
+    return {
+        settings: findWorkflowLoggingSettings(parents, this.getNode().type),
+        subWorkflowTrigger: findSubWorkflowTrigger(parents)
+    }
+}
+
+/**
+ * Settings the calling workflow propagated on the items: either on the item
+ * this node is processing, or - when nodes in between rebuilt the items - on
+ * the sub-workflow trigger that received them.
+ */
+function readInheritedDefaults(
+    this: IExecuteFunctions,
+    context: WorkflowContext,
+    items: INodeExecutionData[],
+    itemIndex: number
+): ResolvedWorkflowDefaults | undefined {
+    const onItem = readPropagatedDefaults(items[itemIndex]?.json?.[WORKFLOW_LOGGING_ITEM_KEY])
+    if (onItem) {
+        return onItem
+    }
+    if (!context.subWorkflowTrigger) {
+        return undefined
+    }
+    try {
+        const fromTrigger = this.evaluateExpression(
+            `{{ $(${JSON.stringify(context.subWorkflowTrigger)}).first().json[${JSON.stringify(WORKFLOW_LOGGING_ITEM_KEY)}] }}`,
+            itemIndex
+        )
+        return readPropagatedDefaults(fromTrigger)
+    } catch {
+        return undefined
+    }
+}
+
+function resolveWorkflowDefaults(
+    this: IExecuteFunctions,
+    context: WorkflowContext,
+    items: INodeExecutionData[],
+    itemIndex: number
+): ResolvedWorkflowDefaults {
+    const inherited = readInheritedDefaults.call(this, context, items, itemIndex) ?? emptyWorkflowDefaults()
+    const fromAncestors = mergeWorkflowDefaults(
+        context.settings,
+        value => this.evaluateExpression(value as string, itemIndex),
+        this.getNode()
     )
+    return mergeResolvedDefaults(inherited, fromAncestors)
+}
+
+/** The control node's own parameters, with expressions resolved for this item. */
+function readControlNodeDefaults(this: IExecuteFunctions, itemIndex: number): ResolvedWorkflowDefaults {
+    return {
+        enabled: this.getNodeParameter('loggingEnabled', itemIndex, true) !== false,
+        labels: readNameValueMap.call(this, 'labels', itemIndex),
+        additionalHeaders: readNameValueMap.call(this, 'options.additionalHeaders', itemIndex),
+        structuredMetadata: readNameValueMap.call(this, 'options.structuredMetadata', itemIndex),
+        timeout: coerceTimeout(this.getNodeParameter('options.timeout', itemIndex, undefined))
+    }
+}
+
+/**
+ * Passes the input through, tagging every item with the settings that apply
+ * from here on, so Loki nodes in called sub-workflows inherit them too.
+ */
+function runControlNode(this: IExecuteFunctions, items: INodeExecutionData[]): INodeExecutionData[] {
+    if (this.getNodeParameter('options.propagateToSubWorkflows', 0, true) === false) {
+        return items
+    }
+
+    const context = readWorkflowContext.call(this)
+
+    return items.map((item, itemIndex) => ({
+        ...item,
+        json: {
+            ...item.json,
+            [WORKFLOW_LOGGING_ITEM_KEY]: toPropagatedDefaults(
+                mergeResolvedDefaults(
+                    resolveWorkflowDefaults.call(this, context, items, itemIndex),
+                    readControlNodeDefaults.call(this, itemIndex)
+                )
+            ) as IDataObject
+        }
+    }))
 }
 
 function readLogEntry(this: IExecuteFunctions, itemIndex: number, defaults: ResolvedWorkflowDefaults): LokiLogEntry {
@@ -122,14 +216,17 @@ function readLogEntry(this: IExecuteFunctions, itemIndex: number, defaults: Reso
 
 function collectEntries(
     this: IExecuteFunctions,
-    itemCount: number,
+    items: INodeExecutionData[],
     returnData: INodeExecutionData[],
-    defaults: ResolvedWorkflowDefaults
+    context: WorkflowContext,
+    firstItemDefaults: ResolvedWorkflowDefaults
 ): IndexedEntry[] {
     const entries: IndexedEntry[] = []
 
-    for (let itemIndex = 0; itemIndex < itemCount; itemIndex++) {
+    for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
         try {
+            const defaults =
+                itemIndex === 0 ? firstItemDefaults : resolveWorkflowDefaults.call(this, context, items, itemIndex)
             entries.push({
                 entry: readLogEntry.call(this, itemIndex, defaults),
                 itemIndex
@@ -243,10 +340,11 @@ export class Loki implements INodeType {
         const operation = this.getNodeParameter('operation', 0) as string
 
         if (operation === 'setWorkflowLogging') {
-            return [items]
+            return [runControlNode.call(this, items)]
         }
 
-        const defaults = readWorkflowDefaults.call(this)
+        const context = readWorkflowContext.call(this)
+        const defaults = resolveWorkflowDefaults.call(this, context, items, 0)
         if (!defaults.enabled) {
             return [items]
         }
@@ -255,11 +353,11 @@ export class Loki implements INodeType {
 
         const credentials = await this.getCredentials('lokiApi')
         const pushUrl = resolvePushUrl(credentials.url as string, this.getNode())
-        const entries = collectEntries.call(this, items.length, returnData, defaults)
+        const entries = collectEntries.call(this, items, returnData, context, defaults)
 
         const options = this.getNodeParameter('options', 0, {}) as IDataObject
         const batchAllItems = this.getNodeParameter('options.batchAllItems', 0, true) as boolean
-        const timeout = typeof options.timeout === 'number' ? options.timeout : (defaults.timeout ?? 10000)
+        const timeout = coerceTimeout(options.timeout) ?? defaults.timeout ?? 10000
         const additionalHeaders = readAdditionalHeaders.call(this, 0, defaults.additionalHeaders)
         const batches = batchAllItems ? [entries] : entries.map(item => [item])
 

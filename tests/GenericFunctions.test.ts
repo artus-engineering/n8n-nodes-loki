@@ -1,15 +1,20 @@
-import type { INode, NodeTypeAndVersion } from 'n8n-workflow'
+import { type INode, NodeOperationError, type NodeTypeAndVersion } from 'n8n-workflow'
 import { describe, expect, it } from 'vitest'
 import {
     buildContextLabels,
     buildContextMetadata,
     buildStreams,
+    coerceTimeout,
+    findSubWorkflowTrigger,
     findWorkflowLoggingSettings,
+    mergeResolvedDefaults,
     mergeWorkflowDefaults,
     normalizeNameValueRows,
+    readPropagatedDefaults,
     resolvePushUrl,
     serializeLogLine,
     toNanoseconds,
+    toPropagatedDefaults,
     validateLabelName,
     type WorkflowLoggingSettings
 } from '../nodes/Loki/GenericFunctions'
@@ -492,7 +497,7 @@ describe('mergeWorkflowDefaults', () => {
     const identity = (value: unknown) => value
 
     it('returns enabled defaults when there are no settings', () => {
-        expect(mergeWorkflowDefaults([], identity)).toEqual({
+        expect(mergeWorkflowDefaults([], identity, testNode)).toEqual({
             enabled: true,
             labels: {},
             additionalHeaders: {},
@@ -501,8 +506,12 @@ describe('mergeWorkflowDefaults', () => {
     })
 
     it('disables logging when any setting resolves to false', () => {
-        expect(mergeWorkflowDefaults([emptySettings({ loggingEnabled: false })], identity).enabled).toBe(false)
-        expect(mergeWorkflowDefaults([emptySettings({ loggingEnabled: 'false' })], identity).enabled).toBe(false)
+        expect(mergeWorkflowDefaults([emptySettings({ loggingEnabled: false })], identity, testNode).enabled).toBe(
+            false
+        )
+        expect(mergeWorkflowDefaults([emptySettings({ loggingEnabled: 'false' })], identity, testNode).enabled).toBe(
+            false
+        )
     })
 
     it('merges maps in array order so later keys win', () => {
@@ -517,7 +526,7 @@ describe('mergeWorkflowDefaults', () => {
             structuredMetadata: { region: 'eu', cluster: 'a' }
         })
 
-        expect(mergeWorkflowDefaults([first, second], identity)).toEqual({
+        expect(mergeWorkflowDefaults([first, second], identity, testNode)).toEqual({
             enabled: true,
             labels: { env: 'prod', team: 'platform' },
             additionalHeaders: { 'X-A': '1', 'X-B': '2' },
@@ -527,17 +536,24 @@ describe('mergeWorkflowDefaults', () => {
 
     it('keeps the last resolved numeric timeout', () => {
         expect(
-            mergeWorkflowDefaults([emptySettings({ timeout: 3000 }), emptySettings({ timeout: 5000 })], identity)
-                .timeout
+            mergeWorkflowDefaults(
+                [emptySettings({ timeout: 3000 }), emptySettings({ timeout: 5000 })],
+                identity,
+                testNode
+            ).timeout
         ).toBe(5000)
-        expect(mergeWorkflowDefaults([emptySettings({ timeout: 3000 }), emptySettings()], identity).timeout).toBe(3000)
+        expect(
+            mergeWorkflowDefaults([emptySettings({ timeout: 3000 }), emptySettings()], identity, testNode).timeout
+        ).toBe(3000)
     })
 
     it('parses numeric timeout strings and skips empty or invalid values', () => {
-        expect(mergeWorkflowDefaults([emptySettings({ timeout: '2500' })], identity).timeout).toBe(2500)
-        expect(mergeWorkflowDefaults([emptySettings({ timeout: '' })], identity).timeout).toBeUndefined()
-        expect(mergeWorkflowDefaults([emptySettings({ timeout: 'nope' })], identity).timeout).toBeUndefined()
-        expect(mergeWorkflowDefaults([emptySettings({ timeout: { ms: 1 } })], identity).timeout).toBeUndefined()
+        expect(mergeWorkflowDefaults([emptySettings({ timeout: '2500' })], identity, testNode).timeout).toBe(2500)
+        expect(mergeWorkflowDefaults([emptySettings({ timeout: '' })], identity, testNode).timeout).toBeUndefined()
+        expect(mergeWorkflowDefaults([emptySettings({ timeout: 'nope' })], identity, testNode).timeout).toBeUndefined()
+        expect(
+            mergeWorkflowDefaults([emptySettings({ timeout: { ms: 1 } })], identity, testNode).timeout
+        ).toBeUndefined()
     })
 
     it('stringifies resolved label values without using Object.toString', () => {
@@ -575,7 +591,8 @@ describe('mergeWorkflowDefaults', () => {
                         }
                     })
                 ],
-                resolveValue
+                resolveValue,
+                testNode
             ).labels
         ).toEqual({ count: '3', flag: 'true', meta: '{"ok":true}', blank: '', other: '' })
     })
@@ -603,7 +620,8 @@ describe('mergeWorkflowDefaults', () => {
                         timeout: '={{ $vars.TIMEOUT }}'
                     })
                 ],
-                resolveValue
+                resolveValue,
+                testNode
             )
         ).toEqual({
             enabled: false,
@@ -612,5 +630,147 @@ describe('mergeWorkflowDefaults', () => {
             structuredMetadata: {},
             timeout: 2500
         })
+    })
+})
+
+describe('coerceTimeout', () => {
+    it('accepts numbers and numeric strings', () => {
+        expect(coerceTimeout(5000)).toBe(5000)
+        expect(coerceTimeout('5000')).toBe(5000)
+    })
+
+    it('rejects everything that is not a finite number', () => {
+        expect(coerceTimeout(undefined)).toBeUndefined()
+        expect(coerceTimeout('')).toBeUndefined()
+        expect(coerceTimeout('soon')).toBeUndefined()
+        expect(coerceTimeout(Number.POSITIVE_INFINITY)).toBeUndefined()
+        expect(coerceTimeout({ ms: 1 })).toBeUndefined()
+    })
+})
+
+describe('mergeWorkflowDefaults expression errors', () => {
+    it('wraps a failing resolver in a NodeOperationError naming the control node', () => {
+        const boom = () => {
+            throw new Error('Referenced node is unexecuted')
+        }
+
+        expect(() =>
+            mergeWorkflowDefaults(
+                [emptySettings({ name: 'Mute Switch', loggingEnabled: '={{ $json.flag }}' })],
+                boom,
+                testNode
+            )
+        ).toThrowError(/Referenced node is unexecuted/)
+        try {
+            mergeWorkflowDefaults(
+                [emptySettings({ name: 'Mute Switch', loggingEnabled: '={{ $json.flag }}' })],
+                boom,
+                testNode
+            )
+        } catch (error) {
+            expect(error).toBeInstanceOf(NodeOperationError)
+            expect((error as NodeOperationError).description).toContain('Mute Switch')
+        }
+    })
+})
+
+describe('readPropagatedDefaults', () => {
+    it('ignores values that are not an object', () => {
+        expect(readPropagatedDefaults(undefined)).toBeUndefined()
+        expect(readPropagatedDefaults('off')).toBeUndefined()
+        expect(readPropagatedDefaults([])).toBeUndefined()
+    })
+
+    it('coerces the maps and the timeout it finds on the item', () => {
+        expect(
+            readPropagatedDefaults({
+                enabled: true,
+                labels: { env: 'prod', build: 7, '': 'dropped' },
+                additionalHeaders: { 'X-Trace': 'abc' },
+                structuredMetadata: 'nonsense',
+                timeout: '2500'
+            })
+        ).toEqual({
+            enabled: true,
+            labels: { env: 'prod', build: '7' },
+            additionalHeaders: { 'X-Trace': 'abc' },
+            structuredMetadata: {},
+            timeout: 2500
+        })
+    })
+
+    it('treats a missing enabled flag as on and an explicit false as off', () => {
+        expect(readPropagatedDefaults({})?.enabled).toBe(true)
+        expect(readPropagatedDefaults({ enabled: false })?.enabled).toBe(false)
+        expect(readPropagatedDefaults({ enabled: 'false' })?.enabled).toBe(false)
+    })
+})
+
+describe('mergeResolvedDefaults', () => {
+    it('lets the override win per key and keeps logging off once either side is off', () => {
+        const base = {
+            enabled: false,
+            labels: { env: 'prod', team: 'platform' },
+            additionalHeaders: { 'X-A': '1' },
+            structuredMetadata: { region: 'eu' },
+            timeout: 5000
+        }
+        const override = {
+            enabled: true,
+            labels: { env: 'staging' },
+            additionalHeaders: {},
+            structuredMetadata: {},
+            timeout: undefined
+        }
+
+        expect(mergeResolvedDefaults(base, override)).toEqual({
+            enabled: false,
+            labels: { env: 'staging', team: 'platform' },
+            additionalHeaders: { 'X-A': '1' },
+            structuredMetadata: { region: 'eu' },
+            timeout: 5000
+        })
+        expect(mergeResolvedDefaults(override, base).enabled).toBe(false)
+        expect(mergeResolvedDefaults(base, { ...override, timeout: 1000 }).timeout).toBe(1000)
+    })
+})
+
+describe('findSubWorkflowTrigger', () => {
+    it('returns the name of an enabled Execute Sub-workflow trigger ancestor', () => {
+        expect(
+            findSubWorkflowTrigger([
+                parentNode({ name: 'Loki Settings' }),
+                parentNode({ name: 'When Executed by Another Workflow', type: 'n8n-nodes-base.executeWorkflowTrigger' })
+            ])
+        ).toBe('When Executed by Another Workflow')
+    })
+
+    it('ignores a disabled trigger and returns undefined without one', () => {
+        expect(
+            findSubWorkflowTrigger([
+                parentNode({ name: 'Trigger', type: 'n8n-nodes-base.executeWorkflowTrigger', disabled: true })
+            ])
+        ).toBeUndefined()
+        expect(findSubWorkflowTrigger([parentNode()])).toBeUndefined()
+    })
+})
+
+describe('toPropagatedDefaults', () => {
+    it('drops empty maps and an unset timeout', () => {
+        expect(
+            toPropagatedDefaults({ enabled: false, labels: {}, additionalHeaders: {}, structuredMetadata: {} })
+        ).toEqual({ enabled: false })
+    })
+
+    it('round-trips through readPropagatedDefaults', () => {
+        const defaults = {
+            enabled: true,
+            labels: { env: 'prod' },
+            additionalHeaders: { 'X-Trace': 'abc' },
+            structuredMetadata: { region: 'eu' },
+            timeout: 5000
+        }
+
+        expect(readPropagatedDefaults(toPropagatedDefaults(defaults))).toEqual(defaults)
     })
 })

@@ -39,13 +39,28 @@ describe('lokiProperties', () => {
         expect(resolved.options).toEqual({ batchAllItems: false, timestamp: '2024-01-01T00:00:00Z' })
     })
 
+    it('hides the sub-workflow propagation toggle on a Send Log node', () => {
+        const resolved = resolve({
+            operation: 'push',
+            message: 'hello',
+            options: { propagateToSubWorkflows: false, timeout: 5000 }
+        })
+
+        expect(resolved.options).toEqual({ timeout: 5000 })
+    })
+
     it('hides push-only options on a Set Workflow Logging node', () => {
         const resolved = resolve({
             operation: 'setWorkflowLogging',
             loggingEnabled: false,
-            options: { batchAllItems: false, timestamp: '2024-01-01T00:00:00Z', timeout: 5000 }
+            options: {
+                batchAllItems: false,
+                timestamp: '2024-01-01T00:00:00Z',
+                timeout: 5000,
+                propagateToSubWorkflows: false
+            }
         })
 
-        expect(resolved.options).toEqual({ timeout: 5000 })
+        expect(resolved.options).toEqual({ timeout: 5000, propagateToSubWorkflows: false })
     })
 })
