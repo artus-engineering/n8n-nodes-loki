@@ -1,6 +1,8 @@
 import type { INode } from 'n8n-workflow'
 import { describe, expect, it } from 'vitest'
 import {
+    buildContextLabels,
+    buildContextMetadata,
     buildStreams,
     normalizeNameValueRows,
     resolvePushUrl,
@@ -259,6 +261,33 @@ describe('buildStreams', () => {
         expect(() => buildStreams([{ labels: { 'bad-label': 'x' }, line: 'x', timestampNs: '1' }], testNode)).toThrow(
             /Invalid label name/
         )
+    })
+})
+
+describe('buildContextLabels', () => {
+    it('maps workflow name and id onto label names', () => {
+        expect(buildContextLabels({ workflowId: 'wf-1', workflowName: 'Observability' })).toEqual({
+            workflow: 'Observability',
+            workflow_id: 'wf-1'
+        })
+    })
+
+    it('omits missing and blank values', () => {
+        expect(buildContextLabels({})).toEqual({})
+        expect(buildContextLabels({ workflowId: '  ', workflowName: '' })).toEqual({})
+        expect(buildContextLabels({ workflowId: 'wf-1' })).toEqual({ workflow_id: 'wf-1' })
+        expect(buildContextLabels({ workflowName: ' Observability ' })).toEqual({ workflow: 'Observability' })
+    })
+})
+
+describe('buildContextMetadata', () => {
+    it('maps the execution id onto structured metadata', () => {
+        expect(buildContextMetadata({ executionId: 'exec-42' })).toEqual({ execution_id: 'exec-42' })
+    })
+
+    it('omits missing and blank values', () => {
+        expect(buildContextMetadata({})).toEqual({})
+        expect(buildContextMetadata({ executionId: '   ' })).toEqual({})
     })
 })
 

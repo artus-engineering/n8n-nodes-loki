@@ -11,6 +11,8 @@ import {
     NodeOperationError
 } from 'n8n-workflow'
 import {
+    buildContextLabels,
+    buildContextMetadata,
     buildStreams,
     type LokiLogEntry,
     normalizeNameValueRows,
@@ -30,7 +32,11 @@ function readNameValueMap(this: IExecuteFunctions, parameterName: string, itemIn
 }
 
 function readLabels(this: IExecuteFunctions, itemIndex: number): Record<string, string> {
-    const labels = readNameValueMap.call(this, 'labels', itemIndex)
+    const workflow = this.getWorkflow()
+    const labels = {
+        ...buildContextLabels({ workflowId: workflow.id, workflowName: workflow.name }),
+        ...readNameValueMap.call(this, 'labels', itemIndex)
+    }
     if (Object.keys(labels).length === 0) {
         throw new NodeOperationError(this.getNode(), 'At least one label is required', { itemIndex })
     }
@@ -65,7 +71,11 @@ function readLine(this: IExecuteFunctions, itemIndex: number): string {
 }
 
 function readMetadata(this: IExecuteFunctions, itemIndex: number): Record<string, string> | undefined {
-    const metadata = readNameValueMap.call(this, 'options.structuredMetadata', itemIndex)
+    const sendExecutionId = this.getNodeParameter('options.executionIdMetadata', itemIndex, true) as boolean
+    const metadata = {
+        ...(sendExecutionId ? buildContextMetadata({ executionId: this.getExecutionId() }) : {}),
+        ...readNameValueMap.call(this, 'options.structuredMetadata', itemIndex)
+    }
     return Object.keys(metadata).length === 0 ? undefined : metadata
 }
 
@@ -182,7 +192,7 @@ export class Loki implements INodeType {
             dark: 'file:loki.dark.svg'
         },
         group: ['output'],
-        version: [1, 2],
+        version: 1,
         subtitle: '={{$parameter["operation"]}}',
         description: 'Send log lines to Grafana Loki',
         defaults: {

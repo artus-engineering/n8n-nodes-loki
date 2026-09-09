@@ -9,6 +9,47 @@ export interface LokiLogEntry {
     metadata?: Record<string, string>
 }
 
+export interface N8nContext {
+    workflowId?: string
+    workflowName?: string
+    executionId?: string
+}
+
+function presentValue(value: string | undefined): string | undefined {
+    const trimmed = value?.trim()
+    return trimmed || undefined
+}
+
+/**
+ * Low-cardinality n8n context that is safe to attach as Loki stream labels.
+ * High-cardinality values such as the execution ID belong in structured metadata.
+ */
+export function buildContextLabels(context: N8nContext): Record<string, string> {
+    const labels: Record<string, string> = {}
+    const workflowName = presentValue(context.workflowName)
+    const workflowId = presentValue(context.workflowId)
+    if (workflowName) {
+        labels.workflow = workflowName
+    }
+    if (workflowId) {
+        labels.workflow_id = workflowId
+    }
+    return labels
+}
+
+/**
+ * High-cardinality n8n context that belongs on the entry as structured metadata,
+ * not as stream labels.
+ */
+export function buildContextMetadata(context: N8nContext): Record<string, string> {
+    const metadata: Record<string, string> = {}
+    const executionId = presentValue(context.executionId)
+    if (executionId) {
+        metadata.execution_id = executionId
+    }
+    return metadata
+}
+
 export interface LokiStream {
     stream: Record<string, string>
     values: Array<[string, string] | [string, string, Record<string, string>]>

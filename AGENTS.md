@@ -23,11 +23,11 @@ Canonical contributor and AI-agent guide for `@artus-engineering/n8n-nodes-loki`
 
 ## Build output
 
-`n8n-node build` (`tsc` + copy `**/*.{png,svg}` and `**/__schema__/**/*.json`) globs those extensions across the **whole repository**, only excluding `dist` and `node_modules` — there's no way to scope it further. Since this repo also has an `assets/` folder (README logo) and a generated `coverage/` folder (Vitest HTML report icons), a plain build would ship both into the npm package. `pnpm run build` therefore runs `scripts/clean-dist.mjs` afterwards, which deletes everything under `dist/` except `nodes/`, `credentials/`, and `package.json`. If you add a new top-level output n8n needs (rare), update that allowlist.
+`n8n-node build` (`tsc` + copy `**/*.{png,svg}` and `**/__schema__/**/*.json`) globs those extensions across the **whole repository**, only excluding `dist` and `node_modules` — there's no way to scope it further. Since this repo also has an `assets/` folder (README logo), a plain build would ship it into the npm package. `pnpm run build` therefore runs `scripts/clean-dist.mjs` afterwards, which deletes everything under `dist/` except `nodes/`, `credentials/`, and `package.json`. If you add a new top-level output n8n needs (rare), update that allowlist.
 
 ## Testing
 
-- Vitest, `coverage-v8`, lcov output to `coverage/lcov.info` (uploaded to SonarQube by CI).
+- Vitest, `coverage-v8`, `lcovonly` output to `coverage/lcov.info` (uploaded to SonarQube by CI). Do not use the `lcov` reporter — it also writes an HTML report under `coverage/lcov-report/` whose generated JS files trip `n8n-node lint`.
 - `tests/GenericFunctions.test.ts` covers the pure helpers directly.
 - `tests/Loki.node.test.ts` stubs a minimal `IExecuteFunctions` (`getNodeParameter`, `getCredentials`, `getNode`, `continueOnFail`, `helpers.httpRequestWithAuthentication`) and asserts on the exact request bodies sent to Loki.
 - `tests/LokiApi.credentials.test.ts` covers `authenticate()` for every auth mode.

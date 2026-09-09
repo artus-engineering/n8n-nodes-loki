@@ -23,6 +23,8 @@ interface StubOptions {
     credentials?: Record<string, unknown>
     httpRequestWithAuthentication: ReturnType<typeof vi.fn>
     continueOnFail?: boolean
+    workflow?: { id?: string; name?: string; active: boolean }
+    executionId?: string
 }
 
 function createExecuteFunctions(opts: StubOptions): IExecuteFunctions {
@@ -41,6 +43,8 @@ function createExecuteFunctions(opts: StubOptions): IExecuteFunctions {
             getByPath(opts.paramsByItem[itemIndex] ?? {}, name, fallback),
         getCredentials: async () => opts.credentials ?? { url: 'https://loki.example.com' },
         getNode: () => node,
+        getWorkflow: () => opts.workflow ?? { id: 'wf-1', name: 'Observability', active: true },
+        getExecutionId: () => opts.executionId ?? 'exec-42',
         continueOnFail: () => opts.continueOnFail ?? false,
         helpers: {
             httpRequestWithAuthentication: opts.httpRequestWithAuthentication
@@ -62,6 +66,7 @@ function defaultParams(overrides: ParamTree = {}): ParamTree {
         options: {
             timestamp: '2024-01-01T00:00:00.000Z',
             structuredMetadata: {},
+            executionIdMetadata: true,
             batchAllItems: true,
             additionalHeaders: {},
             timeout: 10000
@@ -92,7 +97,10 @@ describe('Loki node execute', () => {
         expect(requestOptions.method).toBe('POST')
         expect(requestOptions.url).toBe('https://loki.example.com/loki/api/v1/push')
         expect(requestOptions.body.streams).toEqual([
-            { stream: { job: 'n8n' }, values: [['1704067200000000000', 'hello world']] }
+            {
+                stream: { job: 'n8n', workflow: 'Observability', workflow_id: 'wf-1' },
+                values: [['1704067200000000000', 'hello world', { execution_id: 'exec-42' }]]
+            }
         ])
         expect(result[0][0].json).toMatchObject({ success: true, statusCode: 204 })
     })
@@ -140,7 +148,7 @@ describe('Loki node execute', () => {
         expect(requestOptions.body.streams[0].values[0]).toEqual([
             '1704067200000000000',
             'hello world',
-            { traceId: 'abc' }
+            { execution_id: 'exec-42', traceId: 'abc' }
         ])
     })
 
@@ -197,7 +205,7 @@ describe('Loki node execute', () => {
         expect(requestOptions.body.streams).toHaveLength(2)
     })
 
-    it('throws when no labels are provided', async () => {
+    it('injects workflow labels when the user provides none', async () => {
         const loki = new Loki()
         const context = createExecuteFunctions({
             items: 1,
@@ -205,7 +213,88 @@ describe('Loki node execute', () => {
             httpRequestWithAuthentication
         })
 
+        await loki.execute.call(context)
+
+        const [, requestOptions] = httpRequestWithAuthentication.mock.calls[0]
+        expect(requestOptions.body.streams[0].stream).toEqual({
+            workflow: 'Observability',
+            workflow_id: 'wf-1'
+        })
+    })
+
+    it('lets a user workflow label override the injected one', async () => {
+        const loki = new Loki()
+        const context = createExecuteFunctions({
+            items: 1,
+            paramsByItem: [
+                defaultParams({
+                    labels: { assignments: [{ id: 'workflow', name: 'workflow', value: 'Custom', type: 'string' }] }
+                })
+            ],
+            httpRequestWithAuthentication
+        })
+
+        await loki.execute.call(context)
+
+        const [, requestOptions] = httpRequestWithAuthentication.mock.calls[0]
+        expect(requestOptions.body.streams[0].stream).toEqual({
+            workflow: 'Custom',
+            workflow_id: 'wf-1'
+        })
+    })
+
+    it('throws when an unsaved workflow has no labels', async () => {
+        const loki = new Loki()
+        const context = createExecuteFunctions({
+            items: 1,
+            paramsByItem: [defaultParams({ labels: { assignments: [] } })],
+            httpRequestWithAuthentication,
+            workflow: { active: false }
+        })
+
         await expect(loki.execute.call(context)).rejects.toThrow('At least one label is required')
+    })
+
+    it('omits the execution id when the structured-metadata option is off', async () => {
+        const loki = new Loki()
+        const context = createExecuteFunctions({
+            items: 1,
+            paramsByItem: [
+                defaultParams({
+                    options: {
+                        ...(defaultParams().options as Record<string, unknown>),
+                        executionIdMetadata: false
+                    }
+                })
+            ],
+            httpRequestWithAuthentication
+        })
+
+        await loki.execute.call(context)
+
+        const [, requestOptions] = httpRequestWithAuthentication.mock.calls[0]
+        expect(requestOptions.body.streams[0].values[0]).toEqual(['1704067200000000000', 'hello world'])
+    })
+
+    it('lets a user execution_id override the injected one', async () => {
+        const loki = new Loki()
+        const context = createExecuteFunctions({
+            items: 1,
+            paramsByItem: [
+                defaultParams({
+                    options: {
+                        ...(defaultParams().options as Record<string, unknown>),
+                        structuredMetadata: { metadata: [{ name: 'execution_id', value: 'user-exec' }] }
+                    }
+                })
+            ],
+            httpRequestWithAuthentication
+        })
+
+        await loki.execute.call(context)
+
+        const [, requestOptions] = httpRequestWithAuthentication.mock.calls[0]
+        expect(requestOptions.body.streams[0].values[0][2]).toEqual({ execution_id: 'user-exec' })
     })
 
     it('still reads the legacy fixedCollection label wrapper', async () => {
@@ -219,7 +308,11 @@ describe('Loki node execute', () => {
         await loki.execute.call(context)
 
         const [, requestOptions] = httpRequestWithAuthentication.mock.calls[0]
-        expect(requestOptions.body.streams[0].stream).toEqual({ job: 'legacy' })
+        expect(requestOptions.body.streams[0].stream).toEqual({
+            job: 'legacy',
+            workflow: 'Observability',
+            workflow_id: 'wf-1'
+        })
     })
 
     it('reads a flat label object the way MCP often writes it', async () => {
@@ -233,7 +326,11 @@ describe('Loki node execute', () => {
         await loki.execute.call(context)
 
         const [, requestOptions] = httpRequestWithAuthentication.mock.calls[0]
-        expect(requestOptions.body.streams[0].stream).toEqual({ job: 'n8n', workflow: 'Observability' })
+        expect(requestOptions.body.streams[0].stream).toEqual({
+            job: 'n8n',
+            workflow: 'Observability',
+            workflow_id: 'wf-1'
+        })
     })
 
     it('continues on fail and reports the error as item JSON', async () => {
@@ -242,7 +339,8 @@ describe('Loki node execute', () => {
             items: 1,
             paramsByItem: [defaultParams({ labels: { assignments: [] } })],
             httpRequestWithAuthentication,
-            continueOnFail: true
+            continueOnFail: true,
+            workflow: { active: false }
         })
 
         const result = await loki.execute.call(context)
