@@ -21,7 +21,8 @@ export const lokiProperties: INodeProperties[] = [
         name: 'labels',
         type: 'assignmentCollection',
         default: {},
-        description: 'Loki stream labels for this log entry, e.g. "job" / "n8n". At least one label is required.'
+        description:
+            'Loki stream labels for this log entry, e.g. "job" / "n8n". The node always adds "workflow" and "workflow_id" from the current n8n workflow.'
     },
     {
         displayName: 'Log Format',
@@ -103,6 +104,14 @@ export const lokiProperties: INodeProperties[] = [
                 default: true,
                 description:
                     'Whether to send all input items to Loki in a single push request instead of one request per item'
+            },
+            {
+                displayName: 'Send Execution ID as Structured Metadata',
+                name: 'executionIdMetadata',
+                type: 'boolean',
+                default: true,
+                description:
+                    'Whether to attach the n8n execution ID as structured metadata on every entry. Requires Loki 3.0+ with a TSDB schema v13. Disable for Loki 2.x, which rejects structured metadata with a 400.'
             },
             {
                 displayName: 'Structured Metadata',
