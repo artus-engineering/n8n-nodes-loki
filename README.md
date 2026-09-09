@@ -1,5 +1,9 @@
 <div align="center">
-  <img alt="Artus Engineering" src="assets/Artus-Engineering-Logos_artus-logo-groß-wort-und-bildmarke-zweizeilig-violet.svg" width="400" />
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/artus-engineering-logo-white.svg" />
+    <source media="(prefers-color-scheme: light)" srcset="assets/artus-engineering-logo-black.svg" />
+    <img alt="Artus Engineering" src="assets/artus-engineering-logo-black.svg" width="400" />
+  </picture>
 </div>
 
 <p align="center">
