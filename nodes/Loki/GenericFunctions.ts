@@ -1,4 +1,4 @@
-import { type INode, NodeOperationError } from 'n8n-workflow'
+import { type INode, NodeOperationError, type NodeParameterValueType, type NodeTypeAndVersion } from 'n8n-workflow'
 
 const LABEL_NAME_PATTERN = /^[a-zA-Z_]\w*$/
 const DEFAULT_JOB_LABEL = 'n8n'
@@ -357,4 +357,139 @@ export function buildStreams(entries: LokiLogEntry[], node: INode): LokiStream[]
     }
 
     return [...streamsByKey.values()]
+}
+
+export interface WorkflowLoggingSettings {
+    name: string
+    loggingEnabled: NodeParameterValueType | undefined
+    labels: unknown
+    additionalHeaders: unknown
+    structuredMetadata: unknown
+    timeout: unknown
+}
+
+export interface ResolvedWorkflowDefaults {
+    enabled: boolean
+    labels: Record<string, string>
+    additionalHeaders: Record<string, string>
+    structuredMetadata: Record<string, string>
+    timeout?: number
+}
+
+/**
+ * Finds enabled "Set Workflow Logging" control nodes among the given
+ * ancestors. Disabled canvas nodes are skipped. Raw parameter values are
+ * returned as stored — unset `loggingEnabled` (n8n omits default `true`)
+ * is left undefined so callers treat it as enabled.
+ */
+export function findWorkflowLoggingSettings(
+    parents: NodeTypeAndVersion[],
+    nodeType: string
+): WorkflowLoggingSettings[] {
+    const settings: WorkflowLoggingSettings[] = []
+
+    for (const parent of parents) {
+        if (parent.type !== nodeType || parent.disabled) {
+            continue
+        }
+        if (parent.parameters?.operation !== 'setWorkflowLogging') {
+            continue
+        }
+        const options =
+            parent.parameters.options && typeof parent.parameters.options === 'object'
+                ? (parent.parameters.options as Record<string, unknown>)
+                : {}
+        settings.push({
+            name: parent.name,
+            loggingEnabled: parent.parameters.loggingEnabled as NodeParameterValueType | undefined,
+            labels: parent.parameters.labels,
+            additionalHeaders: options.additionalHeaders,
+            structuredMetadata: options.structuredMetadata,
+            timeout: options.timeout
+        })
+    }
+
+    return settings
+}
+
+function resolveExpressionValue(value: unknown, resolveValue: (value: unknown) => unknown): unknown {
+    if (typeof value === 'string' && value.startsWith('=')) {
+        return resolveValue(value.slice(1))
+    }
+    return value
+}
+
+function stringifyResolved(value: unknown): string {
+    if (value == null) {
+        return ''
+    }
+    if (typeof value === 'string') {
+        return value
+    }
+    if (typeof value === 'number' || typeof value === 'boolean') {
+        return String(value)
+    }
+    if (typeof value === 'object') {
+        return JSON.stringify(value)
+    }
+    return ''
+}
+
+function resolveNameValueMap(raw: unknown, resolveValue: (value: unknown) => unknown): Record<string, string> {
+    const mapped: Record<string, string> = {}
+    for (const { name, value } of normalizeNameValueRows(raw)) {
+        mapped[name] = stringifyResolved(resolveExpressionValue(value, resolveValue))
+    }
+    return mapped
+}
+
+function resolveTimeout(raw: unknown, resolveValue: (value: unknown) => unknown): number | undefined {
+    if (raw === undefined || raw === null || raw === '') {
+        return undefined
+    }
+    const resolved = resolveExpressionValue(raw, resolveValue)
+    if (typeof resolved === 'number' && Number.isFinite(resolved)) {
+        return resolved
+    }
+    if (typeof resolved === 'string' && resolved !== '') {
+        const parsed = Number(resolved)
+        if (Number.isFinite(parsed)) {
+            return parsed
+        }
+    }
+    return undefined
+}
+
+/**
+ * Merges control-node snapshots into workflow defaults. Maps and timeout
+ * use last-wins order. Any resolved `false` disables logging.
+ */
+export function mergeWorkflowDefaults(
+    settings: WorkflowLoggingSettings[],
+    resolveValue: (value: unknown) => unknown
+): ResolvedWorkflowDefaults {
+    const defaults: ResolvedWorkflowDefaults = {
+        enabled: true,
+        labels: {},
+        additionalHeaders: {},
+        structuredMetadata: {}
+    }
+
+    for (const setting of settings) {
+        const loggingEnabled = resolveExpressionValue(setting.loggingEnabled, resolveValue)
+        if (loggingEnabled === false || loggingEnabled === 'false') {
+            defaults.enabled = false
+        }
+
+        Object.assign(defaults.labels, resolveNameValueMap(setting.labels, resolveValue))
+        Object.assign(defaults.additionalHeaders, resolveNameValueMap(setting.additionalHeaders, resolveValue))
+        Object.assign(defaults.structuredMetadata, resolveNameValueMap(setting.structuredMetadata, resolveValue))
+
+        const timeout = resolveTimeout(setting.timeout, resolveValue)
+        if (timeout !== undefined) {
+            defaults.timeout = timeout
+        }
+    }
+
+    return defaults
 }

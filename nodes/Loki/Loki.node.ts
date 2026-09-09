@@ -14,8 +14,11 @@ import {
     buildContextLabels,
     buildContextMetadata,
     buildStreams,
+    findWorkflowLoggingSettings,
     type LokiLogEntry,
+    mergeWorkflowDefaults,
     normalizeNameValueRows,
+    type ResolvedWorkflowDefaults,
     resolvePushUrl,
     serializeLogLine,
     toNanoseconds
@@ -31,10 +34,15 @@ function readNameValueMap(this: IExecuteFunctions, parameterName: string, itemIn
     return mapped
 }
 
-function readLabels(this: IExecuteFunctions, itemIndex: number): Record<string, string> {
+function readLabels(
+    this: IExecuteFunctions,
+    itemIndex: number,
+    workflowLabels: Record<string, string>
+): Record<string, string> {
     const workflow = this.getWorkflow()
     return {
         ...buildContextLabels({ workflowId: workflow.id, workflowName: workflow.name }),
+        ...workflowLabels,
         ...readNameValueMap.call(this, 'labels', itemIndex)
     }
 }
@@ -66,16 +74,28 @@ function readLine(this: IExecuteFunctions, itemIndex: number): string {
     return serializeLogLine('json', { jsonInputMode: 'fields', fields }, this.getNode())
 }
 
-function readMetadata(this: IExecuteFunctions, itemIndex: number): Record<string, string> | undefined {
+function readMetadata(
+    this: IExecuteFunctions,
+    itemIndex: number,
+    workflowMetadata: Record<string, string>
+): Record<string, string> | undefined {
     const metadata = {
         ...buildContextMetadata({ executionId: this.getExecutionId() }),
+        ...workflowMetadata,
         ...readNameValueMap.call(this, 'options.structuredMetadata', itemIndex)
     }
     return Object.keys(metadata).length === 0 ? undefined : metadata
 }
 
-function readAdditionalHeaders(this: IExecuteFunctions, itemIndex: number): Record<string, string> {
-    return readNameValueMap.call(this, 'options.additionalHeaders', itemIndex)
+function readAdditionalHeaders(
+    this: IExecuteFunctions,
+    itemIndex: number,
+    workflowHeaders: Record<string, string>
+): Record<string, string> {
+    return {
+        ...workflowHeaders,
+        ...readNameValueMap.call(this, 'options.additionalHeaders', itemIndex)
+    }
 }
 
 interface IndexedEntry {
@@ -83,23 +103,35 @@ interface IndexedEntry {
     itemIndex: number
 }
 
-function readLogEntry(this: IExecuteFunctions, itemIndex: number): LokiLogEntry {
+function readWorkflowDefaults(this: IExecuteFunctions): ResolvedWorkflowDefaults {
+    const parents = this.getParentNodes?.(this.getNode().name, { includeNodeParameters: true }) ?? []
+    return mergeWorkflowDefaults(findWorkflowLoggingSettings(parents, this.getNode().type), value =>
+        this.evaluateExpression(value as string, 0)
+    )
+}
+
+function readLogEntry(this: IExecuteFunctions, itemIndex: number, defaults: ResolvedWorkflowDefaults): LokiLogEntry {
     const timestamp = this.getNodeParameter('options.timestamp', itemIndex, '') as string
     return {
-        labels: readLabels.call(this, itemIndex),
+        labels: readLabels.call(this, itemIndex, defaults.labels),
         line: readLine.call(this, itemIndex),
         timestampNs: toNanoseconds(timestamp || undefined, this.getNode()),
-        metadata: readMetadata.call(this, itemIndex)
+        metadata: readMetadata.call(this, itemIndex, defaults.structuredMetadata)
     }
 }
 
-function collectEntries(this: IExecuteFunctions, itemCount: number, returnData: INodeExecutionData[]): IndexedEntry[] {
+function collectEntries(
+    this: IExecuteFunctions,
+    itemCount: number,
+    returnData: INodeExecutionData[],
+    defaults: ResolvedWorkflowDefaults
+): IndexedEntry[] {
     const entries: IndexedEntry[] = []
 
     for (let itemIndex = 0; itemIndex < itemCount; itemIndex++) {
         try {
             entries.push({
-                entry: readLogEntry.call(this, itemIndex),
+                entry: readLogEntry.call(this, itemIndex, defaults),
                 itemIndex
             })
         } catch (error) {
@@ -199,7 +231,8 @@ export class Loki implements INodeType {
         credentials: [
             {
                 name: 'lokiApi',
-                required: true
+                required: true,
+                displayOptions: { show: { operation: ['push'] } }
             }
         ],
         properties: lokiProperties
@@ -207,15 +240,27 @@ export class Loki implements INodeType {
 
     async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
         const items = this.getInputData()
+        const operation = this.getNodeParameter('operation', 0) as string
+
+        if (operation === 'setWorkflowLogging') {
+            return [items]
+        }
+
+        const defaults = readWorkflowDefaults.call(this)
+        if (!defaults.enabled) {
+            return [items]
+        }
+
         const returnData: INodeExecutionData[] = []
 
         const credentials = await this.getCredentials('lokiApi')
         const pushUrl = resolvePushUrl(credentials.url as string, this.getNode())
-        const entries = collectEntries.call(this, items.length, returnData)
+        const entries = collectEntries.call(this, items.length, returnData, defaults)
 
+        const options = this.getNodeParameter('options', 0, {}) as IDataObject
         const batchAllItems = this.getNodeParameter('options.batchAllItems', 0, true) as boolean
-        const timeout = this.getNodeParameter('options.timeout', 0, 10000) as number
-        const additionalHeaders = readAdditionalHeaders.call(this, 0)
+        const timeout = typeof options.timeout === 'number' ? options.timeout : (defaults.timeout ?? 10000)
+        const additionalHeaders = readAdditionalHeaders.call(this, 0, defaults.additionalHeaders)
         const batches = batchAllItems ? [entries] : entries.map(item => [item])
 
         for (const batch of batches) {

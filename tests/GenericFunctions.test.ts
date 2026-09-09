@@ -1,14 +1,17 @@
-import type { INode } from 'n8n-workflow'
+import type { INode, NodeTypeAndVersion } from 'n8n-workflow'
 import { describe, expect, it } from 'vitest'
 import {
     buildContextLabels,
     buildContextMetadata,
     buildStreams,
+    findWorkflowLoggingSettings,
+    mergeWorkflowDefaults,
     normalizeNameValueRows,
     resolvePushUrl,
     serializeLogLine,
     toNanoseconds,
-    validateLabelName
+    validateLabelName,
+    type WorkflowLoggingSettings
 } from '../nodes/Loki/GenericFunctions'
 
 const testNode: INode = {
@@ -371,5 +374,243 @@ describe('normalizeNameValueRows', () => {
         expect(normalizeNameValueRows({ assignments: [{ value: 'n8n' }] })).toEqual([])
         expect(normalizeNameValueRows(undefined)).toEqual([])
         expect(normalizeNameValueRows({})).toEqual([])
+    })
+})
+
+function parentNode(overrides: Partial<NodeTypeAndVersion> = {}): NodeTypeAndVersion {
+    return {
+        name: 'Loki Settings',
+        type: 'loki',
+        typeVersion: 1,
+        disabled: false,
+        parameters: { operation: 'setWorkflowLogging' },
+        ...overrides
+    }
+}
+
+function emptySettings(overrides: Partial<WorkflowLoggingSettings> = {}) {
+    return {
+        name: 'Loki Settings',
+        loggingEnabled: undefined,
+        labels: undefined,
+        additionalHeaders: undefined,
+        structuredMetadata: undefined,
+        timeout: undefined,
+        ...overrides
+    }
+}
+
+describe('findWorkflowLoggingSettings', () => {
+    it('returns nothing when there are no parents', () => {
+        expect(findWorkflowLoggingSettings([], 'loki')).toEqual([])
+    })
+
+    it('ignores unrelated node types', () => {
+        expect(
+            findWorkflowLoggingSettings(
+                [parentNode({ type: 'n8n-nodes-base.set', parameters: { operation: 'setWorkflowLogging' } })],
+                'loki'
+            )
+        ).toEqual([])
+    })
+
+    it('ignores a Loki ancestor that is not a control node', () => {
+        expect(findWorkflowLoggingSettings([parentNode({ parameters: { operation: 'push' } })], 'loki')).toEqual([])
+    })
+
+    it('ignores a disabled control node', () => {
+        expect(
+            findWorkflowLoggingSettings(
+                [
+                    parentNode({
+                        disabled: true,
+                        parameters: { operation: 'setWorkflowLogging', loggingEnabled: false }
+                    })
+                ],
+                'loki'
+            )
+        ).toEqual([])
+    })
+
+    it('returns an unset loggingEnabled as undefined (default on)', () => {
+        expect(findWorkflowLoggingSettings([parentNode()], 'loki')).toEqual([emptySettings()])
+    })
+
+    it('returns an explicit false and raw default fields', () => {
+        const labels = { assignments: [{ name: 'env', value: 'prod', type: 'string' }] }
+        expect(
+            findWorkflowLoggingSettings(
+                [
+                    parentNode({
+                        parameters: {
+                            operation: 'setWorkflowLogging',
+                            loggingEnabled: false,
+                            labels,
+                            options: {
+                                additionalHeaders: { header: [{ name: 'X-Trace', value: 'abc' }] },
+                                structuredMetadata: { metadata: [{ name: 'region', value: 'eu' }] },
+                                timeout: 5000
+                            }
+                        }
+                    })
+                ],
+                'loki'
+            )
+        ).toEqual([
+            emptySettings({
+                loggingEnabled: false,
+                labels,
+                additionalHeaders: { header: [{ name: 'X-Trace', value: 'abc' }] },
+                structuredMetadata: { metadata: [{ name: 'region', value: 'eu' }] },
+                timeout: 5000
+            })
+        ])
+    })
+
+    it('returns an expression string without evaluating it', () => {
+        expect(
+            findWorkflowLoggingSettings(
+                [parentNode({ parameters: { operation: 'setWorkflowLogging', loggingEnabled: '={{ $vars.LOKI }}' } })],
+                'loki'
+            )
+        ).toEqual([emptySettings({ loggingEnabled: '={{ $vars.LOKI }}' })])
+    })
+
+    it('returns every matching control node', () => {
+        const parents = [
+            parentNode({ name: 'First', parameters: { operation: 'setWorkflowLogging', loggingEnabled: true } }),
+            parentNode({ name: 'Second', parameters: { operation: 'setWorkflowLogging', loggingEnabled: false } })
+        ]
+        expect(findWorkflowLoggingSettings(parents, 'loki')).toEqual([
+            emptySettings({ name: 'First', loggingEnabled: true }),
+            emptySettings({ name: 'Second', loggingEnabled: false })
+        ])
+    })
+})
+
+describe('mergeWorkflowDefaults', () => {
+    const identity = (value: unknown) => value
+
+    it('returns enabled defaults when there are no settings', () => {
+        expect(mergeWorkflowDefaults([], identity)).toEqual({
+            enabled: true,
+            labels: {},
+            additionalHeaders: {},
+            structuredMetadata: {}
+        })
+    })
+
+    it('disables logging when any setting resolves to false', () => {
+        expect(mergeWorkflowDefaults([emptySettings({ loggingEnabled: false })], identity).enabled).toBe(false)
+        expect(mergeWorkflowDefaults([emptySettings({ loggingEnabled: 'false' })], identity).enabled).toBe(false)
+    })
+
+    it('merges maps in array order so later keys win', () => {
+        const first = emptySettings({
+            labels: { env: 'dev', team: 'platform' },
+            additionalHeaders: { 'X-A': '1' },
+            structuredMetadata: { region: 'us' }
+        })
+        const second = emptySettings({
+            labels: { env: 'prod' },
+            additionalHeaders: { 'X-B': '2' },
+            structuredMetadata: { region: 'eu', cluster: 'a' }
+        })
+
+        expect(mergeWorkflowDefaults([first, second], identity)).toEqual({
+            enabled: true,
+            labels: { env: 'prod', team: 'platform' },
+            additionalHeaders: { 'X-A': '1', 'X-B': '2' },
+            structuredMetadata: { region: 'eu', cluster: 'a' }
+        })
+    })
+
+    it('keeps the last resolved numeric timeout', () => {
+        expect(
+            mergeWorkflowDefaults([emptySettings({ timeout: 3000 }), emptySettings({ timeout: 5000 })], identity)
+                .timeout
+        ).toBe(5000)
+        expect(mergeWorkflowDefaults([emptySettings({ timeout: 3000 }), emptySettings()], identity).timeout).toBe(3000)
+    })
+
+    it('parses numeric timeout strings and skips empty or invalid values', () => {
+        expect(mergeWorkflowDefaults([emptySettings({ timeout: '2500' })], identity).timeout).toBe(2500)
+        expect(mergeWorkflowDefaults([emptySettings({ timeout: '' })], identity).timeout).toBeUndefined()
+        expect(mergeWorkflowDefaults([emptySettings({ timeout: 'nope' })], identity).timeout).toBeUndefined()
+        expect(mergeWorkflowDefaults([emptySettings({ timeout: { ms: 1 } })], identity).timeout).toBeUndefined()
+    })
+
+    it('stringifies resolved label values without using Object.toString', () => {
+        const resolveValue = (value: unknown) => {
+            if (value === '{{ $json.count }}') {
+                return 3
+            }
+            if (value === '{{ $json.flag }}') {
+                return true
+            }
+            if (value === '{{ $json.meta }}') {
+                return { ok: true }
+            }
+            if (value === '{{ $json.empty }}') {
+                return null
+            }
+            if (value === '{{ $json.other }}') {
+                return Symbol('x')
+            }
+            return value
+        }
+
+        expect(
+            mergeWorkflowDefaults(
+                [
+                    emptySettings({
+                        labels: {
+                            assignments: [
+                                { name: 'count', value: '={{ $json.count }}', type: 'string' },
+                                { name: 'flag', value: '={{ $json.flag }}', type: 'string' },
+                                { name: 'meta', value: '={{ $json.meta }}', type: 'string' },
+                                { name: 'blank', value: '={{ $json.empty }}', type: 'string' },
+                                { name: 'other', value: '={{ $json.other }}', type: 'string' }
+                            ]
+                        }
+                    })
+                ],
+                resolveValue
+            ).labels
+        ).toEqual({ count: '3', flag: 'true', meta: '{"ok":true}', blank: '', other: '' })
+    })
+
+    it('resolves expression values through the injected resolver', () => {
+        const resolveValue = (value: unknown) => {
+            if (value === '{{ $vars.LOKI }}') {
+                return false
+            }
+            if (value === '{{ $vars.ENV }}') {
+                return 'staging'
+            }
+            if (value === '{{ $vars.TIMEOUT }}') {
+                return 2500
+            }
+            return value
+        }
+
+        expect(
+            mergeWorkflowDefaults(
+                [
+                    emptySettings({
+                        loggingEnabled: '={{ $vars.LOKI }}',
+                        labels: { env: '={{ $vars.ENV }}' },
+                        timeout: '={{ $vars.TIMEOUT }}'
+                    })
+                ],
+                resolveValue
+            )
+        ).toEqual({
+            enabled: false,
+            labels: { env: 'staging' },
+            additionalHeaders: {},
+            structuredMetadata: {},
+            timeout: 2500
+        })
     })
 })
