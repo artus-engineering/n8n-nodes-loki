@@ -17,7 +17,7 @@ export interface N8nContext {
 
 function presentValue(value: string | undefined): string | undefined {
     const trimmed = value?.trim()
-    return trimmed ? trimmed : undefined
+    return trimmed || undefined
 }
 
 /**
