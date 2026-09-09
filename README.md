@@ -39,7 +39,7 @@
 - **Optional authentication** — None, Basic Auth, Bearer Token, or a custom header — configured once on a reusable credential
 - **Custom headers & multi-tenant support** — Arbitrary headers plus a dedicated `X-Scope-OrgID` tenant field
 - **Plain text or JSON messages** — Free-form JSON, or build a JSON object from typed key/value fields, no manual `JSON.stringify` needed
-- **Automatic n8n context** — Every entry gets `workflow` and `workflow_id` stream labels plus the execution ID as structured metadata
+- **Automatic n8n context** — Every entry gets `job`, `workflow` and `workflow_id` stream labels plus the execution ID as structured metadata
 - **Labels & structured metadata** — Set additional Loki stream labels and per-entry structured metadata from the node UI
 - **Batching** — Send all input items in a single push request (grouped into streams by label set), or one request per item
 - **Zero runtime dependencies** — Uses n8n's built-in HTTP helpers only, per n8n's community node requirements
@@ -85,7 +85,7 @@ Use **Test** on the credential to verify connectivity (calls `GET /loki/api/v1/l
 | Parameter | Description |
 | --- | --- |
 | **Operation** | `Send Log` — pushes one or more log lines to Loki |
-| **Labels** | Extra Loki stream labels (name/value pairs, Edit Fields–style), e.g. `job` = `n8n`. `workflow` and `workflow_id` are added automatically. In workflow JSON this is `{ "assignments": [{ "name": "job", "value": "n8n", "type": "string" }] }` |
+| **Labels** | Extra Loki stream labels (name/value pairs, Edit Fields–style). `job` (`n8n`), `workflow` and `workflow_id` are added automatically. In workflow JSON this is `{ "assignments": [{ "name": "env", "value": "prod", "type": "string" }] }` |
 | **Log Format** | `Text` or `JSON` |
 | **Message** | The plain-text log line (shown for `Text`) |
 | **JSON Input Mode** | `JSON` (a raw JSON value) or `Fields Below` (build an object from typed fields) — shown for `JSON` |
@@ -97,8 +97,7 @@ Use **Test** on the credential to verify connectivity (calls `GET /loki/api/v1/l
 | Option | Description |
 | --- | --- |
 | **Timestamp** | ISO-8601 or epoch (seconds/ms/µs/ns auto-detected). Defaults to now. Do not also add a `timestamp` label or JSON field — Loki already indexes this value on the entry |
-| **Structured Metadata** | Extra per-entry [structured metadata](https://grafana.com/docs/loki/latest/get-started/labels/structured-metadata/) (indexed but not part of the stream labels). The execution ID is added automatically unless the option below is off |
-| **Send Execution ID as Structured Metadata** | Default on. Attaches `execution_id` as structured metadata. Requires Loki 3.0+ with a TSDB schema v13; disable for Loki 2.x |
+| **Structured Metadata** | Extra per-entry [structured metadata](https://grafana.com/docs/loki/latest/get-started/labels/structured-metadata/) (indexed but not part of the stream labels). The execution ID is always added as `execution_id` |
 | **Send All Items in One Request** | Default on. Groups all input items into one push request (still split into separate streams per distinct label set); disable to send one request per item |
 | **Additional Headers** | Extra headers for this request, layered on top of the credential's |
 | **Timeout** | Request timeout in ms (default `10000`) |
@@ -109,21 +108,21 @@ Every log entry is tagged with the current workflow without extra fields on the 
 
 | Field | Where it lands | Why |
 | --- | --- | --- |
+| `job` | Stream label | Fixed to `n8n` so every log from this node is queryable as one job |
 | `workflow` | Stream label | Low cardinality — bounded by how many workflows you have |
 | `workflow_id` | Stream label | Survives a rename; same cardinality as `workflow` |
 | `execution_id` | [Structured metadata](https://grafana.com/docs/loki/latest/get-started/labels/structured-metadata/) | High cardinality — a new value every run, so it must not become a stream label |
 | Entry timestamp | Loki value tuple (`[ts, line]`) | Already produced automatically. Do not add a `timestamp` label or JSON field |
 
-A user-defined label or metadata key of the same name wins over the injected value. Structured metadata needs Loki 3.0+ (TSDB schema v13); turn **Send Execution ID as Structured Metadata** off on Loki 2.x.
+A user-defined label or metadata key of the same name wins over the injected value. Structured metadata requires Loki 3.0+ with a TSDB schema v13.
 
 ## Usage
 
 ### Plain text
 
-Set **Log Format** to `Text`, add a `job` label, and enter a message:
+Set **Log Format** to `Text` and enter a message. `job`, `workflow` and `workflow_id` are added automatically:
 
 ```
-job = n8n
 Message: Workflow "Order Sync" completed successfully
 ```
 

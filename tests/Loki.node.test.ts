@@ -57,7 +57,7 @@ function createExecuteFunctions(opts: StubOptions): IExecuteFunctions {
 function defaultParams(overrides: ParamTree = {}): ParamTree {
     return {
         operation: 'push',
-        labels: { assignments: [{ id: 'job', name: 'job', value: 'n8n', type: 'string' }] },
+        labels: { assignments: [] },
         logFormat: 'text',
         message: 'hello world',
         jsonInputMode: 'raw',
@@ -66,7 +66,6 @@ function defaultParams(overrides: ParamTree = {}): ParamTree {
         options: {
             timestamp: '2024-01-01T00:00:00.000Z',
             structuredMetadata: {},
-            executionIdMetadata: true,
             batchAllItems: true,
             additionalHeaders: {},
             timeout: 10000
@@ -217,6 +216,7 @@ describe('Loki node execute', () => {
 
         const [, requestOptions] = httpRequestWithAuthentication.mock.calls[0]
         expect(requestOptions.body.streams[0].stream).toEqual({
+            job: 'n8n',
             workflow: 'Observability',
             workflow_id: 'wf-1'
         })
@@ -238,42 +238,10 @@ describe('Loki node execute', () => {
 
         const [, requestOptions] = httpRequestWithAuthentication.mock.calls[0]
         expect(requestOptions.body.streams[0].stream).toEqual({
+            job: 'n8n',
             workflow: 'Custom',
             workflow_id: 'wf-1'
         })
-    })
-
-    it('throws when an unsaved workflow has no labels', async () => {
-        const loki = new Loki()
-        const context = createExecuteFunctions({
-            items: 1,
-            paramsByItem: [defaultParams({ labels: { assignments: [] } })],
-            httpRequestWithAuthentication,
-            workflow: { active: false }
-        })
-
-        await expect(loki.execute.call(context)).rejects.toThrow('At least one label is required')
-    })
-
-    it('omits the execution id when the structured-metadata option is off', async () => {
-        const loki = new Loki()
-        const context = createExecuteFunctions({
-            items: 1,
-            paramsByItem: [
-                defaultParams({
-                    options: {
-                        ...(defaultParams().options as Record<string, unknown>),
-                        executionIdMetadata: false
-                    }
-                })
-            ],
-            httpRequestWithAuthentication
-        })
-
-        await loki.execute.call(context)
-
-        const [, requestOptions] = httpRequestWithAuthentication.mock.calls[0]
-        expect(requestOptions.body.streams[0].values[0]).toEqual(['1704067200000000000', 'hello world'])
     })
 
     it('lets a user execution_id override the injected one', async () => {
@@ -337,15 +305,21 @@ describe('Loki node execute', () => {
         const loki = new Loki()
         const context = createExecuteFunctions({
             items: 1,
-            paramsByItem: [defaultParams({ labels: { assignments: [] } })],
+            paramsByItem: [
+                defaultParams({
+                    options: {
+                        ...(defaultParams().options as Record<string, unknown>),
+                        timestamp: 'not a timestamp'
+                    }
+                })
+            ],
             httpRequestWithAuthentication,
-            continueOnFail: true,
-            workflow: { active: false }
+            continueOnFail: true
         })
 
         const result = await loki.execute.call(context)
 
-        expect(result[0][0].json.error).toContain('At least one label is required')
+        expect(result[0][0].json.error).toContain('Invalid timestamp')
         expect(httpRequestWithAuthentication).not.toHaveBeenCalled()
     })
 
