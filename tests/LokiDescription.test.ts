@@ -11,8 +11,8 @@ const node = {
     parameters: {}
 } as unknown as INode
 
-function resolve(saved: INodeParameters) {
-    return NodeHelpers.getNodeParameters(lokiProperties, saved, false, false, node, null) as INodeParameters
+function resolve(saved: INodeParameters, returnDefaults = false) {
+    return NodeHelpers.getNodeParameters(lokiProperties, saved, returnDefaults, false, node, null) as INodeParameters
 }
 
 describe('lokiProperties', () => {
@@ -62,5 +62,11 @@ describe('lokiProperties', () => {
         })
 
         expect(resolved.options).toEqual({ timeout: 5000, propagateToSubWorkflows: false })
+    })
+
+    it('does not fill collection children when resolving defaults', () => {
+        const resolved = resolve({ operation: 'setWorkflowLogging' }, true)
+
+        expect(resolved.options).toEqual({})
     })
 })

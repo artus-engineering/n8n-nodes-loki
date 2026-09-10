@@ -170,12 +170,13 @@ function resolveWorkflowDefaults(
 
 /** The control node's own parameters, with expressions resolved for this item. */
 function readControlNodeDefaults(this: IExecuteFunctions, itemIndex: number): ResolvedWorkflowDefaults {
+    const options = this.getNodeParameter('options', itemIndex, {}) as IDataObject
     return {
         enabled: this.getNodeParameter('loggingEnabled', itemIndex, true) !== false,
         labels: readNameValueMap.call(this, 'labels', itemIndex),
         additionalHeaders: readNameValueMap.call(this, 'options.additionalHeaders', itemIndex),
         structuredMetadata: readNameValueMap.call(this, 'options.structuredMetadata', itemIndex),
-        timeout: coerceTimeout(this.getNodeParameter('options.timeout', itemIndex, undefined))
+        timeout: coerceTimeout(options.timeout)
     }
 }
 
