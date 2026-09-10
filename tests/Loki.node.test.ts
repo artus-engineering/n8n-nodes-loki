@@ -46,8 +46,13 @@ function createExecuteFunctions(opts: StubOptions): IExecuteFunctions {
 
     const stub = {
         getInputData: () => items,
-        getNodeParameter: (name: string, itemIndex: number, fallback?: unknown) =>
-            getByPath(opts.paramsByItem[itemIndex] ?? {}, name, fallback),
+        getNodeParameter: (name: string, itemIndex: number, fallback?: unknown) => {
+            const value = getByPath(opts.paramsByItem[itemIndex] ?? {}, name, fallback)
+            if (value === undefined) {
+                throw new Error(`Could not get parameter "${name}"`)
+            }
+            return value
+        },
         getCredentials: vi.fn(async () => opts.credentials ?? { url: 'https://loki.example.com' }),
         getNode: () => node,
         getWorkflow: () => opts.workflow ?? { id: 'wf-1', name: 'Observability', active: true },
@@ -594,6 +599,20 @@ describe('Loki node execute', () => {
         ])
         expect(httpRequestWithAuthentication).not.toHaveBeenCalled()
         expect(context.getCredentials).not.toHaveBeenCalled()
+    })
+
+    it('propagates without a timeout when the control node did not add that option', async () => {
+        const loki = new Loki()
+        const context = createExecuteFunctions({
+            items: 1,
+            paramsByItem: [{ operation: 'setWorkflowLogging' }],
+            httpRequestWithAuthentication
+        })
+
+        const result = await loki.execute.call(context)
+
+        expect(result[0][0].json._lokiLogging).toEqual({ enabled: true })
+        expect(httpRequestWithAuthentication).not.toHaveBeenCalled()
     })
 
     it('leaves items untouched when propagation to sub-workflows is turned off', async () => {
