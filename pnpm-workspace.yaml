@@ -8,3 +8,27 @@ allowBuilds:
   isolated-vm: false
   ssh2: false
   unrs-resolver: false
+# pnpm 11 defaults to a 1-day maturity window. These pins were published inside
+# that window; keep the versions exact so the exemption expires with the bump.
+minimumReleaseAgeExclude:
+  - "@biomejs/biome@2.5.14"
+  - "@biomejs/cli-darwin-arm64@2.5.14"
+  - "@biomejs/cli-darwin-x64@2.5.14"
+  - "@biomejs/cli-linux-arm64-musl@2.5.14"
+  - "@biomejs/cli-linux-arm64@2.5.14"
+  - "@biomejs/cli-linux-x64-musl@2.5.14"
+  - "@biomejs/cli-linux-x64@2.5.14"
+  - "@biomejs/cli-win32-arm64@2.5.14"
+  - "@biomejs/cli-win32-x64@2.5.14"
+  - "@n8n/ai-node-sdk@0.29.4"
+  - "@n8n/ai-utilities@0.32.4"
+  - "@n8n/api-types@1.39.4"
+  - "@n8n/backend-common@1.39.4"
+  - "@n8n/backend-network@1.13.4"
+  - "@n8n/config@2.37.1"
+  - "@n8n/decorators@1.39.4"
+  - "@n8n/eslint-plugin-community-nodes@0.32.1"
+  - "@n8n/expression-runtime@0.30.1"
+  - "@n8n/node-cli@0.48.4"
+  - "@n8n/tournament@1.11.1"
+  - n8n-workflow@2.39.2

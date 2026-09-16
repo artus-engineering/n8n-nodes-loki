@@ -1,14 +1,14 @@
 {
     "name": "@artus-engineering/n8n-nodes-loki",
-    "version": "1.1.1",
+    "version": "1.1.2",
     "packageManager": "pnpm@11.24.0",
     "description": "n8n community node to write log lines to Grafana Loki.",
     "license": "MIT",
-    "homepage": "https://github.com/artus-engineering/n8n-nodes-loki#readme",
+    "homepage": "https://artus-engineering.de",
     "keywords": ["n8n-community-node-package", "n8n", "loki", "grafana", "logging", "observability"],
     "author": {
-        "name": "Jonas Scholl",
-        "email": "jonas@artus-engineering.de"
+        "name": "Artus Engineering",
+        "email": "hi@artus-engineering.de"
     },
     "repository": {
         "type": "git",
@@ -39,13 +39,13 @@
         "n8n-workflow": "*"
     },
     "devDependencies": {
-        "@biomejs/biome": "2.5.12",
-        "@n8n/node-cli": "0.47.0",
-        "@vitest/coverage-v8": "5.0.0",
-        "eslint": "9.39.4",
-        "lefthook": "2.1.12",
+        "@biomejs/biome": "2.5.14",
+        "@n8n/node-cli": "0.48.4",
+        "@vitest/coverage-v8": "5.0.1",
+        "eslint": "9.39.5",
+        "lefthook": "2.1.14",
         "n8n-workflow": "2.16.0",
         "typescript": "5.9.3",
-        "vitest": "5.0.0"
+        "vitest": "5.0.1"
     }
 }
