@@ -2,6 +2,8 @@ import type { IExecuteFunctions, INode, NodeTypeAndVersion } from 'n8n-workflow'
 import { NodeApiError, NodeOperationError } from 'n8n-workflow'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Loki } from '../nodes/Loki/Loki.node'
+import codex from '../nodes/Loki/Loki.node.json'
+import pkg from '../package.json'
 
 type ParamTree = Record<string, unknown>
 
@@ -102,6 +104,16 @@ function defaultParams(overrides: ParamTree = {}): ParamTree {
         ...overrides
     }
 }
+
+describe('Loki node codex', () => {
+    it('identifies the node as <package-name>.<nodeName>', () => {
+        expect(codex.node).toBe(`${pkg.name}.${new Loki().description.name}`)
+    })
+
+    it('uses the fixed codex nodeVersion', () => {
+        expect(codex.nodeVersion).toBe('1.0')
+    })
+})
 
 describe('Loki node execute', () => {
     let httpRequestWithAuthentication: ReturnType<typeof vi.fn>
