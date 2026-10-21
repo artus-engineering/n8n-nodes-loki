@@ -1,6 +1,6 @@
 {
-    "node": "n8n-nodes-loki",
-    "nodeVersion": "2.0",
+    "node": "@artus-engineering/n8n-nodes-loki.loki",
+    "nodeVersion": "1.0",
     "codexVersion": "1.0",
     "categories": ["Development", "Utility"],
     "resources": {

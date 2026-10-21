@@ -149,6 +149,7 @@ function readInheritedDefaults(
         )
         return readPropagatedDefaults(fromTrigger)
     } catch {
+        // The trigger may not have run in this execution (e.g. a manual run started from another trigger); that just means nothing was inherited.
         return undefined
     }
 }
