@@ -6,13 +6,16 @@
 docs
 tests
 assets
+scripts
 
 # Files
 *.md
+*.yml
 *.json
 *.config.js
 *.config.ts
 *.config.mjs
+*.properties
 !package.json
 !README.md
 !nodes/**/*.json
