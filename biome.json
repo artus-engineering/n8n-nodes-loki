@@ -1,6 +1,10 @@
 {
-    "$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
-    "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+    "$schema": "https://biomejs.dev/schemas/2.6.8/schema.json",
+    "vcs": {
+        "enabled": true,
+        "clientKind": "git",
+        "useIgnoreFile": true
+    },
     "files": {
         "includes": [
             "**",
@@ -64,7 +68,9 @@
                 "useValidTypeof": "error",
                 "useYield": "error"
             },
-            "style": { "useBlockStatements": "off" },
+            "style": {
+                "useBlockStatements": "off"
+            },
             "suspicious": {
                 "noAsyncPromiseExecutor": "error",
                 "noCatchAssign": "error",
@@ -130,8 +136,12 @@
             "includes": ["**/*.ts"],
             "linter": {
                 "rules": {
-                    "complexity": { "noUselessTypeConstraint": "error" },
-                    "correctness": { "noUnusedVariables": "warn" },
+                    "complexity": {
+                        "noUselessTypeConstraint": "error"
+                    },
+                    "correctness": {
+                        "noUnusedVariables": "warn"
+                    },
                     "style": {
                         "noCommonJs": "off",
                         "noNamespace": "error",
@@ -141,7 +151,12 @@
                     },
                     "suspicious": {
                         "noCommentText": "error",
-                        "noConsole": { "level": "warn", "options": { "allow": ["warn", "error"] } },
+                        "noConsole": {
+                            "level": "warn",
+                            "options": {
+                                "allow": ["warn", "error"]
+                            }
+                        },
                         "noExplicitAny": "off",
                         "noExtraNonNullAssertion": "error",
                         "noMisleadingInstantiator": "error",
@@ -161,12 +176,21 @@
             },
             "linter": {
                 "rules": {
-                    "correctness": { "noUndeclaredVariables": "off" },
-                    "suspicious": { "noExplicitAny": "off" }
+                    "correctness": {
+                        "noUndeclaredVariables": "off"
+                    },
+                    "suspicious": {
+                        "noExplicitAny": "off"
+                    }
                 }
             }
         },
-        { "includes": ["**/*.d.ts"], "linter": { "rules": {} } },
+        {
+            "includes": ["**/*.d.ts"],
+            "linter": {
+                "rules": {}
+            }
+        },
         {
             "includes": ["**/*.config.ts", "**/*.config.mts", "**/*.config.mjs"],
             "javascript": {
@@ -174,5 +198,17 @@
             }
         }
     ],
-    "assist": { "enabled": true, "actions": { "source": { "organizeImports": "on" } } }
+    "assist": {
+        "enabled": true,
+        "actions": {
+            "source": {
+                "organizeImports": "on"
+            }
+        }
+    },
+    "yaml": {
+        "formatter": {
+            "indentWidth": 2
+        }
+    }
 }
