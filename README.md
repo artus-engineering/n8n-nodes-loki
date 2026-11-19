@@ -77,54 +77,54 @@ See n8n's [community nodes installation guide](https://docs.n8n.io/integrations/
 
 Create a **Loki API** credential and configure:
 
-| Field | Description |
-| --- | --- |
-| **Loki URL** | Base URL or full push endpoint, e.g. `https://loki.example.com` or `https://loki.example.com/loki/api/v1/push` — both work |
-| **Authentication** | `None` (default), `Basic Auth`, `Bearer Token`, or `Header Auth` |
-| **Username / Password** | Shown for Basic Auth |
-| **Token** | Shown for Bearer Token |
-| **Header Name / Header Secret** | Shown for Header Auth, e.g. an `X-Api-Key` header |
-| **Tenant ID (X-Scope-OrgID)** | Sent as `X-Scope-OrgID` for multi-tenant Loki setups. Leave empty otherwise |
-| **Custom Headers** | Arbitrary name/value headers sent with every request |
-| **Ignore SSL Issues (Insecure)** | Accept self-signed or otherwise invalid TLS certificates |
+| Field                            | Description                                                                                                                |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| **Loki URL**                     | Base URL or full push endpoint, e.g. `https://loki.example.com` or `https://loki.example.com/loki/api/v1/push` — both work |
+| **Authentication**               | `None` (default), `Basic Auth`, `Bearer Token`, or `Header Auth`                                                           |
+| **Username / Password**          | Shown for Basic Auth                                                                                                       |
+| **Token**                        | Shown for Bearer Token                                                                                                     |
+| **Header Name / Header Secret**  | Shown for Header Auth, e.g. an `X-Api-Key` header                                                                          |
+| **Tenant ID (X-Scope-OrgID)**    | Sent as `X-Scope-OrgID` for multi-tenant Loki setups. Leave empty otherwise                                                |
+| **Custom Headers**               | Arbitrary name/value headers sent with every request                                                                       |
+| **Ignore SSL Issues (Insecure)** | Accept self-signed or otherwise invalid TLS certificates                                                                   |
 
 Use **Test** on the credential to verify connectivity (calls `GET /loki/api/v1/labels`).
 
 ## Node reference
 
-| Parameter | Description |
-| --- | --- |
-| **Operation** | `Send Log` — pushes one or more log lines to Loki. `Set Workflow Logging` — a pass-through switch that later Loki nodes read to mute or allow logging |
-| **Logging Enabled** | Shown for `Set Workflow Logging`. Defaults to on. Turn off to mute every Loki node further down this workflow |
-| **Labels** | Extra Loki stream labels (name/value pairs, Edit Fields–style). Shown for both operations: on Send Log they apply to this entry; on Set Workflow Logging they are added to every downstream Loki node. A same-name label on Send Log overrides the workflow default. `job` (`n8n`), `workflow` and `workflow_id` are added automatically. In workflow JSON this is `{ "assignments": [{ "name": "env", "value": "prod", "type": "string" }] }` |
-| **Log Format** | `Text` or `JSON` |
-| **Message** | The plain-text log line (shown for `Text`) |
-| **JSON Input Mode** | `JSON` (a raw JSON value) or `Fields Below` (build an object from typed fields) — shown for `JSON` |
-| **JSON** | The raw JSON log line — shown for JSON Input Mode `JSON` |
-| **Fields** | Name/Value/Type rows assembled into the JSON log line — shown for JSON Input Mode `Fields Below`. Same `assignments` JSON shape as Labels |
+| Parameter           | Description                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Operation**       | `Send Log` — pushes one or more log lines to Loki. `Set Workflow Logging` — a pass-through switch that later Loki nodes read to mute or allow logging                                                                                                                                                                                                                                                                                          |
+| **Logging Enabled** | Shown for `Set Workflow Logging`. Defaults to on. Turn off to mute every Loki node further down this workflow                                                                                                                                                                                                                                                                                                                                  |
+| **Labels**          | Extra Loki stream labels (name/value pairs, Edit Fields–style). Shown for both operations: on Send Log they apply to this entry; on Set Workflow Logging they are added to every downstream Loki node. A same-name label on Send Log overrides the workflow default. `job` (`n8n`), `workflow` and `workflow_id` are added automatically. In workflow JSON this is `{ "assignments": [{ "name": "env", "value": "prod", "type": "string" }] }` |
+| **Log Format**      | `Text` or `JSON`                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| **Message**         | The plain-text log line (shown for `Text`)                                                                                                                                                                                                                                                                                                                                                                                                     |
+| **JSON Input Mode** | `JSON` (a raw JSON value) or `Fields Below` (build an object from typed fields) — shown for `JSON`                                                                                                                                                                                                                                                                                                                                             |
+| **JSON**            | The raw JSON log line — shown for JSON Input Mode `JSON`                                                                                                                                                                                                                                                                                                                                                                                       |
+| **Fields**          | Name/Value/Type rows assembled into the JSON log line — shown for JSON Input Mode `Fields Below`. Same `assignments` JSON shape as Labels                                                                                                                                                                                                                                                                                                      |
 
 ### Options
 
-| Option | Description |
-| --- | --- |
-| **Timestamp** | ISO-8601 or epoch (seconds/ms/µs/ns auto-detected). Defaults to now. Do not also add a `timestamp` label or JSON field — Loki already indexes this value on the entry |
-| **Structured Metadata** | Extra per-entry [structured metadata](https://grafana.com/docs/loki/latest/get-started/labels/structured-metadata/) (indexed but not part of the stream labels). The execution ID is always added as `execution_id`. Also available on Set Workflow Logging as a default for downstream nodes |
-| **Send All Items in One Request** | Default on. Groups all input items into one push request (still split into separate streams per distinct label set); disable to send one request per item. Send Log only |
-| **Additional Headers** | Extra headers for this request, layered on top of the credential's. Also available on Set Workflow Logging as a default for downstream nodes |
-| **Timeout** | Request timeout in ms (default `10000`). Also available on Set Workflow Logging as a default for downstream nodes |
-| **Propagate to Sub-Workflows** | Set Workflow Logging only, default on. Writes the resolved settings onto every item as `_lokiLogging` so sub-workflows inherit them |
+| Option                            | Description                                                                                                                                                                                                                                                                                   |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Timestamp**                     | ISO-8601 or epoch (seconds/ms/µs/ns auto-detected). Defaults to now. Do not also add a `timestamp` label or JSON field — Loki already indexes this value on the entry                                                                                                                         |
+| **Structured Metadata**           | Extra per-entry [structured metadata](https://grafana.com/docs/loki/latest/get-started/labels/structured-metadata/) (indexed but not part of the stream labels). The execution ID is always added as `execution_id`. Also available on Set Workflow Logging as a default for downstream nodes |
+| **Send All Items in One Request** | Default on. Groups all input items into one push request (still split into separate streams per distinct label set); disable to send one request per item. Send Log only                                                                                                                      |
+| **Additional Headers**            | Extra headers for this request, layered on top of the credential's. Also available on Set Workflow Logging as a default for downstream nodes                                                                                                                                                  |
+| **Timeout**                       | Request timeout in ms (default `10000`). Also available on Set Workflow Logging as a default for downstream nodes                                                                                                                                                                             |
+| **Propagate to Sub-Workflows**    | Set Workflow Logging only, default on. Writes the resolved settings onto every item as `_lokiLogging` so sub-workflows inherit them                                                                                                                                                           |
 
 ## Automatic n8n context
 
 Every log entry is tagged with the current workflow without extra fields on the node:
 
-| Field | Where it lands | Why |
-| --- | --- | --- |
-| `job` | Stream label | Fixed to `n8n` so every log from this node is queryable as one job |
-| `workflow` | Stream label | Low cardinality — bounded by how many workflows you have |
-| `workflow_id` | Stream label | Survives a rename; same cardinality as `workflow` |
-| `execution_id` | [Structured metadata](https://grafana.com/docs/loki/latest/get-started/labels/structured-metadata/) | High cardinality — a new value every run, so it must not become a stream label |
-| Entry timestamp | Loki value tuple (`[ts, line]`) | Already produced automatically. Do not add a `timestamp` label or JSON field |
+| Field           | Where it lands                                                                                      | Why                                                                            |
+| --------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `job`           | Stream label                                                                                        | Fixed to `n8n` so every log from this node is queryable as one job             |
+| `workflow`      | Stream label                                                                                        | Low cardinality — bounded by how many workflows you have                       |
+| `workflow_id`   | Stream label                                                                                        | Survives a rename; same cardinality as `workflow`                              |
+| `execution_id`  | [Structured metadata](https://grafana.com/docs/loki/latest/get-started/labels/structured-metadata/) | High cardinality — a new value every run, so it must not become a stream label |
+| Entry timestamp | Loki value tuple (`[ts, line]`)                                                                     | Already produced automatically. Do not add a `timestamp` label or JSON field   |
 
 A user-defined label or metadata key of the same name wins over the injected value. Structured metadata requires Loki 3.0+ with a TSDB schema v13.
 
@@ -142,7 +142,7 @@ How later `Send Log` nodes resolve the switch and defaults:
 - No control node upstream, or `Logging Enabled` left at its default / unset → logging stays on
 - Any enabled upstream control node resolving to off disables logging ("off wins")
 - A control node that is itself disabled on the canvas is ignored, so disabling that node is the quick way to restore logging
-- The control node can use an expression (`={{ $vars.LOKI_ENABLED }}`). Expressions on a control node in the *same* workflow are evaluated in the reading Loki node's context; `Logging Enabled`, `Timeout` and `Additional Headers` are resolved once against the first input item, `Labels` and `Structured Metadata` per item
+- The control node can use an expression (`={{ $vars.LOKI_ENABLED }}`). Expressions on a control node in the _same_ workflow are evaluated in the reading Loki node's context; `Logging Enabled`, `Timeout` and `Additional Headers` are resolved once against the first input item, `Labels` and `Structured Metadata` per item
 - An expression that resolves to something other than `false` (including an unset variable) leaves logging on — the switch fails open
 - When logging is off, each `Send Log` node passes its input items through unchanged and does not call Loki
 - Workflow labels / headers / metadata are merged under the automatic n8n context; a same-name field on the Send Log node overrides the workflow default
@@ -176,9 +176,9 @@ Set **Log Format** to `JSON`, **JSON Input Mode** to `JSON`:
 
 ```json
 {
-  "event": "order.synced",
-  "orderId": "{{ $json.orderId }}",
-  "durationMs": 842
+    "event": "order.synced",
+    "orderId": "{{ $json.orderId }}",
+    "durationMs": 842
 }
 ```
 
@@ -186,12 +186,12 @@ Set **Log Format** to `JSON`, **JSON Input Mode** to `JSON`:
 
 Set **JSON Input Mode** to `Fields Below` and add typed fields:
 
-| Name | Value | Type |
-| --- | --- | --- |
-| `event` | `order.synced` | String |
-| `orderId` | `{{ $json.orderId }}` | String |
-| `durationMs` | `842` | Number |
-| `success` | `true` | Boolean |
+| Name         | Value                 | Type    |
+| ------------ | --------------------- | ------- |
+| `event`      | `order.synced`        | String  |
+| `orderId`    | `{{ $json.orderId }}` | String  |
+| `durationMs` | `842`                 | Number  |
+| `success`    | `true`                | Boolean |
 
 ### Multiple items in one stream
 
@@ -203,25 +203,25 @@ The node builds a standard Loki [push API](https://grafana.com/docs/loki/latest/
 
 ```json
 {
-  "streams": [
-    {
-      "stream": { "job": "n8n", "workflow": "Order Sync", "workflow_id": "wCmWqkUNVuNhbIU0" },
-      "values": [
-        ["1717000000000000000", "Workflow \"Order Sync\" completed successfully", { "execution_id": "1234" }]
-      ]
-    }
-  ]
+    "streams": [
+        {
+            "stream": { "job": "n8n", "workflow": "Order Sync", "workflow_id": "wCmWqkUNVuNhbIU0" },
+            "values": [
+                ["1717000000000000000", "Workflow \"Order Sync\" completed successfully", { "execution_id": "1234" }]
+            ]
+        }
+    ]
 }
 ```
 
 ## Troubleshooting
 
-| Problem | Cause |
-| --- | --- |
-| `400 Bad Request` mentioning a label | Label names must match `[a-zA-Z_][a-zA-Z0-9_]*` — no hyphens or leading digits |
-| `400` — entry out of order / too far behind | Loki requires non-decreasing timestamps per stream; check the **Timestamp** option and clock skew |
-| `401` / `403` | Check the credential's authentication settings and, for multi-tenant Loki, the **Tenant ID (X-Scope-OrgID)** field |
-| `ECONNREFUSED` / TLS errors | Verify the **Loki URL**, and enable **Ignore SSL Issues** for self-signed certificates on self-hosted Loki |
+| Problem                                     | Cause                                                                                                              |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `400 Bad Request` mentioning a label        | Label names must match `[a-zA-Z_][a-zA-Z0-9_]*` — no hyphens or leading digits                                     |
+| `400` — entry out of order / too far behind | Loki requires non-decreasing timestamps per stream; check the **Timestamp** option and clock skew                  |
+| `401` / `403`                               | Check the credential's authentication settings and, for multi-tenant Loki, the **Tenant ID (X-Scope-OrgID)** field |
+| `ECONNREFUSED` / TLS errors                 | Verify the **Loki URL**, and enable **Ignore SSL Issues** for self-signed certificates on self-hosted Loki         |
 
 ## Development
 

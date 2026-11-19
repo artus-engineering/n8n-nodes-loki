@@ -4,10 +4,10 @@ Runner: `ubuntu-latest` (public repo). Cross-project tooling: [Repository Toolin
 
 ## Workflows
 
-| File | Purpose |
-| --- | --- |
-| `.github/workflows/branch.yaml` | Biome lint, n8n node/credential lint, type check, build, unit tests → SonarQube scan → quality gate |
-| `.github/workflows/publish.yaml` | On a published GitHub Release: lint, type check, build, test, `npm publish --provenance` |
+| File                             | Purpose                                                                                             |
+| -------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `.github/workflows/branch.yaml`  | Biome lint, n8n node/credential lint, type check, build, unit tests → SonarQube scan → quality gate |
+| `.github/workflows/publish.yaml` | On a published GitHub Release: lint, type check, build, test, `npm publish --provenance`            |
 
 ## Required checks
 
