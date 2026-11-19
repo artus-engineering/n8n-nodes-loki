@@ -1,0 +1,10 @@
+{
+    "$schema": "https://portal.artus.engineering/schemas/portal.json",
+    "projectId": "cmw5oixqt001r01ebn0pwfg48",
+    "components": {
+        "n8n-nodes-loki": {
+            "name": "n8n Loki Node",
+            "kind": "SERVICE"
+        }
+    }
+}
