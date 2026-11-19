@@ -4,7 +4,10 @@
   "components": {
     "n8n-nodes-loki": {
       "name": "n8n Loki Node",
-      "kind": "SERVICE"
+      "kind": "SERVICE",
+      "integrations": {
+        "sonarqube": "artus-engineering_n8n-nodes-loki_f771277c-125c-400f-aca0-df3d8c63b594"
+      }
     }
   }
 }
