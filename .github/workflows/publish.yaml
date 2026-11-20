@@ -20,7 +20,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v6
+      - uses: artus-engineering/.github/actions/setup-pnpm@feb73e3bc8a16c61582dd578627ba5d6dc07e2ca
 
       - uses: actions/setup-node@v7
         with:
