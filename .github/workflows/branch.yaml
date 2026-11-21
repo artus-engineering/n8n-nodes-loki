@@ -16,12 +16,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  tests:
-    name: Tests
+  lint:
+    name: Lint and format
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      actions: write # upload/download coverage artifact between jobs
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v7
@@ -45,11 +44,77 @@ jobs:
       - name: Lint (n8n node/credential rules)
         run: pnpm run lint:n8n
 
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - uses: artus-engineering/.github/actions/setup-pnpm@feb73e3bc8a16c61582dd578627ba5d6dc07e2ca
+
+      - uses: actions/setup-node@v7
+        with:
+          check-latest: false
+          package-manager-cache: false
+          node-version: "24.x"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
       - name: Type check
         run: pnpm run typecheck
 
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - uses: artus-engineering/.github/actions/setup-pnpm@feb73e3bc8a16c61582dd578627ba5d6dc07e2ca
+
+      - uses: actions/setup-node@v7
+        with:
+          check-latest: false
+          package-manager-cache: false
+          node-version: "24.x"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
       - name: Build package
         run: pnpm run build
+
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - uses: artus-engineering/.github/actions/setup-pnpm@feb73e3bc8a16c61582dd578627ba5d6dc07e2ca
+
+      - uses: actions/setup-node@v7
+        with:
+          check-latest: false
+          package-manager-cache: false
+          node-version: "24.x"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Unit tests
         run: pnpm run test
@@ -96,3 +161,4 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+    if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]') }}
