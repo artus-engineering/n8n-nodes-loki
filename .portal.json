@@ -4,7 +4,10 @@
     "components": {
         "n8n-nodes-loki": {
             "name": "n8n Loki Node",
-            "kind": "SERVICE"
+            "kind": "SERVICE",
+            "environments": {
+                "local": {}
+            }
         }
     }
 }
