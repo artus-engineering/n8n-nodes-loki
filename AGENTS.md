@@ -68,7 +68,7 @@ Run locally before pushing:
 
 CI (`.github/workflows/branch.yaml`) enforces all of the above plus the SonarQube scan and quality gate on `ubuntu-latest` (public repo).
 
-**Dependabot** runs yearly; weekly dependency maintenance is handled by Cursor Automation.
+**Dependency updates** are handled by Cursor Automation.
 
 ## Publishing
 
