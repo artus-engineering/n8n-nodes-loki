@@ -1,0 +1,19 @@
+holds:
+  - package: typescript
+    root: .
+    current: 6.0.x
+    blocked: ">=7.0.0"
+    reason: "TypeScript 7 breaks n8n-node lint (ESLint/typescript-estree TypeError reading 'Cjs' from typescript@7); verified on CI 2026-11-24"
+    source: automation
+    since: 2026-11-24
+    last_checked: 2026-11-24
+    migration_pr: null
+  - package: eslint
+    root: .
+    current: 9.39.x
+    blocked: ">=10.0.0"
+    reason: "@n8n/node-cli eslint stack not compatible with ESLint 10.15.0 on CI (same typescript-estree crash when paired with TS 7; held at 9.x with TS 6)"
+    source: automation
+    since: 2026-11-24
+    last_checked: 2026-11-24
+    migration_pr: null
