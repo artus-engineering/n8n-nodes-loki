@@ -8,11 +8,32 @@ allowBuilds:
   isolated-vm: false
   ssh2: false
   unrs-resolver: false
+minimumReleaseAgeExclude:
+  - "@n8n/ai-node-sdk@0.38.5"
+  - "@n8n/ai-utilities@0.41.5"
+  - "@n8n/api-types@1.48.5"
+  - "@n8n/backend-common@1.48.5"
+  - "@n8n/backend-network@1.22.5"
+  - "@n8n/decorators@1.48.5"
+  - "@n8n/eslint-plugin-community-nodes@0.40.1"
+  - "@n8n/expression-runtime@0.39.4"
+  - "@n8n/inbound-auth@0.7.4"
+  - "@n8n/node-cli@0.57.5"
+  - "@n8n/permissions@0.84.1"
+  - "@n8n/utils@1.55.1"
+  - n8n-workflow@2.48.4
 overrides:
+  # Prototype pollution; remove when every path resolves to >=4.7.10 (pnpm audit, 2026-11-24).
   handlebars@>=3.0.0 <=4.7.9: ^4.7.10
+  # qs arrayLimit bypass GHSA-6w27-2q86-4qqm; remove when lockfile no longer contains <6.16.1.
   qs@>=2.2.5 <6.16.1: ^6.16.1
+  # stream-json DoS; remove when no transitive <3.6.0 remains.
   stream-json@<3.6.0: ^3.6.0
+  # uuid prior versions mishandle/script issues in some minors; remove when all paths >=11.1.1.
   uuid@<11.1.1: ^11.1.1
+  # minimatch ReDoS CVE-2025-5889; remove when @typescript-eslint/* and glob stacks pick >=11.0.9.
   minimatch@>=7.0.0 <11.0.1: ^11.0.9
+  # glob CLI command injection; remove when toolchain no longer pulls <=14.0.1.
   glob@>=9.0.0 <=14.0.1: ^14.0.2
+  # follow-redirects credential leak on redirect; remove when axios/follow-redirects paths >=1.16.2.
   follow-redirects@>=1.16.0 <=1.16.1: ^1.16.2
